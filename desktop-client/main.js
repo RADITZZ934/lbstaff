@@ -1,54 +1,165 @@
-const { app, BrowserWindow, desktopCapturer } = require('electron');
+const { app, BrowserWindow, desktopCapturer, powerMonitor, Tray, Menu, ipcMain } = require('electron');
+const path = require('path');
+const fs = require('fs');
 const axios = require('axios');
 const FormData = require('form-data');
 
 let mainWindow;
+let tray = null;
 let aktivitasAplikasi = {};
 
+// Variabel dinamis untuk menampung data karyawan dan sesi yang sedang aktif
+let currentUser = null;
+let currentTimeEntryId = null;
+
+// Tentukan lokasi file txt yang aman di sistem Windows
+const nikFilePath = path.join(app.getPath('userData'), 'nik_tersimpan.txt');
+
 function createWindow() {
-    // Membuat jendela aplikasi dasar (nantinya bisa diatur show: false agar tersembunyi)
     mainWindow = new BrowserWindow({
-        width: 400,
-        height: 300,
-        show: true,
+        width: 380,
+        height: 480,
+        show: false,
+        autoHideMenuBar: true,
         webPreferences: {
-            nodeIntegration: true
+            nodeIntegration: true,
+            contextIsolation: false
         }
     });
 
-    // Tampilan sederhana agar kita tahu aplikasi sedang jalan
-    mainWindow.loadURL('data:text/html,<h2 style="font-family:sans-serif; text-align:center;">Perekam Karyawan Aktif</h2><p style="text-align:center;">Berjalan di latar belakang...</p>');
+    // Mengarahkan tampilan ke file login di folder views
+    mainWindow.loadFile(path.join(__dirname, 'views', 'index.html'));
+
+    // --- FITUR SYSTEM TRAY (MODE SENYAP) ---
+    mainWindow.on('close', function (event) {
+        if (!app.isQuiting) {
+            event.preventDefault();
+            mainWindow.hide();
+            console.log("Aplikasi disembunyikan ke System Tray.");
+        }
+    });
+
+    mainWindow.on('minimize', function (event) {
+        event.preventDefault();
+        mainWindow.hide();
+    });
 }
 
 // Dijalankan saat aplikasi siap
 app.whenReady().then(() => {
     createWindow();
-    console.log("Aplikasi Desktop Berjalan...");
 
-    // PENTING: Untuk keperluan uji coba, kita atur jedanya menjadi 15 DETIK
-    // (Nantinya diubah menjadi 10 menit / 600000 ms)
+    // Setup System Tray...
+    const iconPath = path.join(__dirname, 'icon.png');
+    tray = new Tray(iconPath);
+    
+    const contextMenu = Menu.buildFromTemplate([
+        { label: 'Buka Dashboard', click: () => { mainWindow.show(); } },
+        { 
+            label: 'Ganti NIK / Logout', 
+            click: async () => { 
+                await hentikanSesi(); 
+                currentUser = null; 
+                // Hapus file txt saat logout
+                if (fs.existsSync(nikFilePath)) {
+                    fs.unlinkSync(nikFilePath);
+                }
+                mainWindow.show(); // Munculkan form login
+            } 
+        },
+        { type: 'separator' },
+        { 
+            label: 'Keluar Sepenuhnya', 
+            click: async () => { 
+                app.isQuiting = true;
+                await hentikanSesi(); 
+                app.quit(); 
+            } 
+        }
+    ]);
+    tray.setToolTip('desktop-client');
+    tray.setContextMenu(contextMenu);
+
+    app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true, path: app.getPath('exe') });
+
+    // --- LOGIKA AUTO-LOGIN LATAR BELAKANG ---
+    if (fs.existsSync(nikFilePath)) {
+        // Jika file txt ada, baca isinya
+        const savedNik = fs.readFileSync(nikFilePath, 'utf8').trim();
+        if (savedNik) {
+            console.log(`[Auto-Login] Menemukan NIK di file txt: ${savedNik}. Menghubungi server...`);
+            loginDariLatarBelakang(savedNik);
+        } else {
+            mainWindow.show(); // File ada tapi kosong, tampilkan form
+        }
+    } else {
+        // Jika file txt tidak ada (belum pernah login), tampilkan form
+        mainWindow.show();
+    }
+
     setInterval(rekamDanKirim, 15000);
-
-    // Pantau jendela aktif setiap 1 detik
     setInterval(pantauJendelaAktif, 1000);
+});
+
+// --- FUNGSI LOGIN LANGSUNG DARI MAIN.JS ---
+async function loginDariLatarBelakang(nik) {
+    try {
+        const response = await axios.post('http://192.168.110.57:3001/api/login', { nik });
+        
+        if (response.data.success) {
+            currentUser = response.data.user;
+            currentTimeEntryId = response.data.time_entry_id;
+            console.log(`✅ [Auto-Login Sukses] Masuk sebagai: ${currentUser.name}`);
+            // Karena sukses, jendela tetap tersembunyi.
+        } else {
+            console.log('❌ [Auto-Login Gagal] NIK tidak valid. Menampilkan form.');
+            mainWindow.show();
+        }
+    } catch (error) {
+        console.error('❌ [Auto-Login Error] Server mati atau tidak ada internet.');
+        mainWindow.show();
+    }
+}
+
+// --- MENERIMA DATA DARI FORM LOGIN MANUAL (index.html) ---
+ipcMain.on('login-sukses', (event, data) => {
+    currentUser = data.user;
+    currentTimeEntryId = data.time_entry_id;
+
+    // SIMPAN NIK KE FILE TXT
+    fs.writeFileSync(nikFilePath, data.nik, 'utf8');
+
+    console.log(`✅ [Login Manual Sukses] Berhasil masuk sebagai: ${currentUser.name}`);
+    mainWindow.hide(); // Sembunyikan jendela
+});
+
+// Mencegat proses aplikasi keluar (termasuk saat laptop di-shutdown OS)
+app.on('before-quit', async (event) => {
+    if (currentTimeEntryId && !app.isSessionClosed) {
+        event.preventDefault();
+        
+        await hentikanSesi();
+        
+        app.isSessionClosed = true;
+        app.quit();
+    }
 });
 
 // Fungsi untuk memantau jendela aktif secara real-time
 async function pantauJendelaAktif() {
+    // Kunci perekam: Jangan pantau jika belum ada karyawan yang login
+    if (!currentUser) return;
+
     try {
         const { default: activeWin } = await import('active-win');
         const window = await activeWin();
-        
+
         if (window) {
-            const appName = window.owner.name; 
-            const windowTitle = window.title;  
-            
-            // --- TAMBAHKAN BARIS LOG INI ---
-            console.log(`[Pendeteksi] Membaca: ${appName} | ${windowTitle}`);
-            // -------------------------------
+            const appName = window.owner.name;
+            const windowTitle = window.title;
 
             const key = `${appName}|${windowTitle}`;
-            
+
             if (!aktivitasAplikasi[key]) {
                 aktivitasAplikasi[key] = {
                     app_name: appName,
@@ -56,7 +167,7 @@ async function pantauJendelaAktif() {
                     duration_seconds: 0
                 };
             }
-            
+
             aktivitasAplikasi[key].duration_seconds += 1;
         }
     } catch (err) {
@@ -66,45 +177,50 @@ async function pantauJendelaAktif() {
 
 // Fungsi inti untuk mengambil screenshot dan mengirim payload
 async function rekamDanKirim() {
+    // Kunci perekam: Jangan rekam dan jangan kirim apapun jika karyawan belum login
+    if (!currentUser || !currentTimeEntryId) return;
+
     try {
+        // --- FITUR DETEKSI IDLE ---
+        const waktuIdleSekarang = powerMonitor.getSystemIdleTime();
+        if (waktuIdleSekarang > 180) { // Toleransi 3 menit
+            console.log(`[Idle] Karyawan tidak aktif selama ${waktuIdleSekarang} detik. Rekaman dijeda.`);
+            aktivitasAplikasi = {}; // Kosongkan keranjang aktivitas
+            return;
+        }
+
         console.log("Sedang mengambil screenshot layar...");
 
-        // 1. Ambil sumber layar (Layar utama) dengan resolusi HD
+        // 1. Ambil sumber layar dengan resolusi yang dioptimalkan
         const sources = await desktopCapturer.getSources({
             types: ['screen'],
-            thumbnailSize: { width: 1280, height: 720 }
+            thumbnailSize: { width: 854, height: 480 }
         });
         const screen = sources[0];
 
-        // 2. Ubah gambar menjadi format JPG (Buffer) dengan kualitas 80%
-        const imageBuffer = screen.thumbnail.toJPEG(80);
+        // 2. Ubah gambar menjadi format JPG Buffer
+        const imageBuffer = screen.thumbnail.toJPEG(60);
 
-        // 3. Siapkan keranjang data (Form-Data) persis seperti di Postman
+        // 3. Siapkan form data dengan ID dinamis
         const form = new FormData();
-
-        // ID ini adalah ID Dummy dari database Anda yang sudah berhasil diuji sebelumnya
-        form.append('user_id', '123e4567-e89b-12d3-a456-426614174000');
-        form.append('time_entry_id', '123e4567-e89b-12d3-a456-426614174001');
-
-        // Data aktivitas tiruan (nantinya diganti dengan deteksi riil)
+        form.append('user_id', currentUser.id);
+        form.append('time_entry_id', currentTimeEntryId);
         form.append('keyboard_clicks', '20');
         form.append('mouse_moves', '15');
-        
-        // Ambil data snapshot aktivitas saat ini untuk dikirim, lalu reset untuk periode berikutnya
+
         const appAndUrlsPayload = Object.values(aktivitasAplikasi);
         aktivitasAplikasi = {};
-        
+
         form.append('app_and_urls', JSON.stringify(appAndUrlsPayload));
 
-        // Masukkan file gambar yang baru saja ditangkap
         form.append('screenshot', imageBuffer, {
             filename: `capture_${Date.now()}.jpg`,
             contentType: 'image/jpeg'
         });
 
-        // 4. Kirim ke Server Backend Anda (Pastikan server node server.js sedang menyala!)
+        // 4. Kirim ke Server Backend
         console.log("Mengirim data ke server...");
-        const response = await axios.post('http://localhost:3000/api/track', form, {
+        const response = await axios.post('http://192.168.110.57:3001/api/track', form, {
             headers: {
                 ...form.getHeaders()
             }
@@ -115,5 +231,20 @@ async function rekamDanKirim() {
 
     } catch (error) {
         console.error("❌ Gagal mengirim data:", error.message);
+    }
+}
+
+// --- FUNGSI UNTUK MENUTUP SESI KERJA DI DATABASE ---
+async function hentikanSesi() {
+    if (!currentTimeEntryId) return;
+
+    try {
+        console.log("Menghentikan sesi kerja di database...");
+        await axios.post('http://192.168.110.57:3001/api/stop-session', {
+            time_entry_id: currentTimeEntryId
+        });
+        console.log("✅ Sesi kerja berhasil ditutup.");
+    } catch (err) {
+        console.error("❌ Gagal menutup sesi kerja:", err.message);
     }
 }

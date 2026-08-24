@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login Karyawan - LB Staff Tracker</title>
+    <style>
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background-color: #f7f9fc; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; color: #333; }
+        .login-card { background: #ffffff; padding: 40px; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.04); width: 100%; max-width: 320px; text-align: center; border: 1px solid #edf2f7; }
+        .login-card h2 { margin-top: 0; font-weight: 700; font-size: 22px; color: #1a202c; margin-bottom: 8px; }
+        .login-card p { font-size: 14px; color: #718096; margin-bottom: 24px; }
+        .input-group { margin-bottom: 20px; text-align: left; }
+        .input-group label { display: block; font-size: 13px; font-weight: 600; color: #4a5568; margin-bottom: 8px; }
+        .input-group input { width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 10px; font-size: 15px; box-sizing: border-box; transition: all 0.3s ease; background-color: #f8fafc; }
+        .input-group input:focus { border-color: #3182ce; background-color: #fff; outline: none; box-shadow: 0 0 0 3px rgba(49, 130, 206, 0.1); }
+        button { width: 100%; padding: 14px; background-color: #2563eb; color: white; border: none; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; transition: background 0.2s; }
+        button:hover { background-color: #1d4ed8; }
+        .error-message { color: #e53e3e; font-size: 13px; margin-top: 16px; display: none; font-weight: 500; }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <h2>Laskar Buah Staff</h2>
+        <p>Silakan masukkan NIK Anda untuk mulai.</p>
+        
+        <div class="input-group">
+            <label>Nomor Induk Karyawan (NIK)</label>
+            <input type="text" id="nik" placeholder="Contoh: 12345" autocomplete="off">
+        </div>
+        
+        <button id="loginBtn">Masuk & Mulai</button>
+        <div id="errorMsg" class="error-message">NIK tidak ditemukan!</div>
+    </div>
+
+    <script>
+        const { ipcRenderer } = require('electron');
+
+        const loginBtn = document.getElementById('loginBtn');
+        const nikInput = document.getElementById('nik');
+        const errorMsg = document.getElementById('errorMsg');
+
+        nikInput.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') { loginBtn.click(); }
+        });
+
+        loginBtn.addEventListener('click', async () => {
+            const nik = nikInput.value.trim();
+
+            if (!nik) {
+                errorMsg.textContent = "NIK tidak boleh kosong!";
+                errorMsg.style.display = 'block';
+                return;
+            }
+
+            loginBtn.textContent = 'Memverifikasi...';
+            loginBtn.disabled = true;
+            errorMsg.style.display = 'none';
+
+            try {
+                const response = await fetch('http://192.168.110.57:3001/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nik })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    loginBtn.textContent = 'Berhasil! Memulai sistem...';
+                    loginBtn.style.backgroundColor = '#10b981'; 
+                    
+                    // Kirim data ke main.js (TERMASUK NIK UNTUK DISIMPAN KE TXT)
+                    ipcRenderer.send('login-sukses', {
+                        user: data.user,
+                        time_entry_id: data.time_entry_id,
+                        nik: nik // <-- NIK dikirim ke main.js
+                    });
+                } else {
+                    errorMsg.textContent = data.message;
+                    errorMsg.style.display = 'block';
+                    loginBtn.textContent = 'Masuk & Mulai';
+                    loginBtn.disabled = false;
+                }
+            } catch (error) {
+                errorMsg.textContent = 'Gagal terhubung ke server.';
+                errorMsg.style.display = 'block';
+                loginBtn.textContent = 'Masuk & Mulai';
+                loginBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
