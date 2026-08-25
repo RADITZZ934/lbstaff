@@ -12,6 +12,11 @@ let aktivitasAplikasi = {};
 let currentUser = null;
 let currentTimeEntryId = null;
 
+// Batas waktu menganggur sebelum perekaman dijeda (contoh: 300 detik = 5 menit)
+// Untuk keperluan TESTING saat ini, mari kita set ke 15 detik saja agar cepat terlihat hasilnya
+const IDLE_THRESHOLD_SECONDS = 15; 
+let isIdle = false; // Penanda status saat ini
+
 // Tentukan lokasi file txt yang aman di sistem Windows
 const nikFilePath = path.join(app.getPath('userData'), 'nik_tersimpan.txt');
 
@@ -180,15 +185,26 @@ async function rekamDanKirim() {
     // Kunci perekam: Jangan rekam dan jangan kirim apapun jika karyawan belum login
     if (!currentUser || !currentTimeEntryId) return;
 
-    try {
-        // --- FITUR DETEKSI IDLE ---
-        const waktuIdleSekarang = powerMonitor.getSystemIdleTime();
-        if (waktuIdleSekarang > 180) { // Toleransi 3 menit
-            console.log(`[Idle] Karyawan tidak aktif selama ${waktuIdleSekarang} detik. Rekaman dijeda.`);
-            aktivitasAplikasi = {}; // Kosongkan keranjang aktivitas
-            return;
+    // --- 1. LOGIKA DETEKSI IDLE (MENGANGGUR) ---
+    // Dapatkan waktu (dalam detik) sejak terakhir kali mouse/keyboard disentuh
+    const idleTime = powerMonitor.getSystemIdleTime();
+    
+    if (idleTime >= IDLE_THRESHOLD_SECONDS) {
+        if (!isIdle) {
+            console.log(`⏸️ [Idle] Tidak ada aktivitas selama ${idleTime} detik. Perekaman dijeda...`);
+            isIdle = true;
         }
+        // Return (berhenti) di sini, jangan jalankan kode screenshot di bawahnya!
+        return; 
+    } else {
+        if (isIdle) {
+            console.log('▶️ [Active] Karyawan kembali aktif. Melanjutkan perekaman...');
+            isIdle = false;
+        }
+    }
 
+    // --- 2. KODE SCREENSHOT & UPLOAD ---
+    try {
         console.log("Sedang mengambil screenshot layar...");
 
         // 1. Ambil sumber layar dengan resolusi yang dioptimalkan

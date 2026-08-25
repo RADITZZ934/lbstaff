@@ -182,20 +182,23 @@ app.post('/api/track', upload.single('screenshot'), async (req, res) => {
 // --- API LIVE MONITORING (KARYAWAN AKTIF) ---
 app.get('/api/live-monitoring', async (req, res) => {
     try {
-        // Query untuk mengambil user yang memiliki sesi tanpa end_time beserta selisih waktu aktivitas terakhir
+        // Query untuk mengambil HANYA sesi paling baru dari setiap karyawan beserta status aktivitasnya
         const query = `
-            SELECT 
+            SELECT DISTINCT ON (u.nik)
                 u.name, 
                 u.nik, 
                 t.start_time,
-                EXTRACT(EPOCH FROM (NOW() - COALESCE(
-                    (SELECT MAX(recorded_at) FROM activity_logs WHERE time_entry_id = t.id),
-                    t.start_time
-                )))::INTEGER as seconds_since_last_activity
+                t.end_time,
+                CASE 
+                    WHEN t.end_time IS NOT NULL THEN 999999
+                    ELSE EXTRACT(EPOCH FROM (NOW() - COALESCE(
+                        (SELECT MAX(recorded_at) FROM activity_logs WHERE time_entry_id = t.id),
+                        t.start_time
+                    )))::INTEGER
+                END as seconds_since_last_activity
             FROM users u
             JOIN time_entries t ON u.id = t.user_id
-            WHERE t.end_time IS NULL
-            ORDER BY t.start_time DESC;
+            ORDER BY u.nik, t.start_time DESC;
         `;
 
         const result = await pool.query(query);
@@ -234,7 +237,7 @@ app.get('/api/user-activity/:nik', async (req, res) => {
 
         // 2. Ambil log aktivitas (screenshot & app/urls) untuk sesi tersebut
         const logsQuery = `
-            SELECT id, screenshot_url, screenshot_url AS screenshot_path, app_and_urls, recorded_at, recorded_at AS created_at
+            SELECT id, screenshot_url, screenshot_url AS screenshot_path, app_and_urls, recorded_at, recorded_at AS created_at, keyboard_clicks, mouse_moves
             FROM activity_logs
             WHERE time_entry_id = $1
             ORDER BY recorded_at DESC

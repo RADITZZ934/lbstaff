@@ -1,0 +1,10 @@
+{
+  "name": "lbstaff-workspace",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev:backend": "pnpm --filter backend start",
+    "dev:dashboard": "pnpm --filter web-dashboard dev",
+    "dev:desktop": "pnpm --filter desktop-client start"
+  }
+}

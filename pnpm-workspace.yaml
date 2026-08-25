@@ -1,0 +1,8 @@
+packages:
+  - 'backend'
+  - 'desktop-client'
+  - 'web-dashboard'
+
+allowBuilds:
+  active-win: true
+  esbuild: true
