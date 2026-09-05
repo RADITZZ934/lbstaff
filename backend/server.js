@@ -93,12 +93,12 @@ pool.connect((err, client, release) => {
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
         // Ambil user_id dari body request (dikirim dari klien)
-        const userId = req.body.user_id;
+        const userId = req.body.user_id || 'unknown';
 
-        // Format folder berdasarkan bulan di D:\lbstaff_uploads (contoh: D:\lbstaff_uploads\karyawan_uuid\2026-08)
+        // Format folder berdasarkan bulan di UPLOADS_DIR (contoh: uploads/karyawan_1/2026-09)
         const date = new Date();
         const monthYear = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-        const dir = path.join('D:', 'lbstaff_uploads', `karyawan_${userId}`, monthYear);
+        const dir = path.join(UPLOADS_DIR, `karyawan_${userId}`, monthYear);
 
         // Buat folder secara otomatis jika belum ada
         if (!fs.existsSync(dir)) {
@@ -210,12 +210,11 @@ app.post('/api/track', upload.single('screenshot'), async (req, res) => {
     try {
         const { user_id, time_entry_id, keyboard_clicks, mouse_moves, app_and_urls } = req.body;
 
-        // Dapatkan path gambar yang baru saja diupload (jika ada file yang dikirim)
-        // Format path untuk disimpan di database
         let screenshot_url = null;
         if (req.file) {
-            screenshot_url = req.file.path.replace(/\\/g, '/');
-            console.log(`[BERHASIL] File screenshot tersimpan di: ${req.file.path}`);
+            const relPath = path.relative(UPLOADS_DIR, req.file.path).replace(/\\/g, '/');
+            screenshot_url = `/uploads/${relPath}`;
+            console.log(`[BERHASIL] File screenshot tersimpan di: ${req.file.path} (URL: ${screenshot_url})`);
         }
 
         // Insert data ke PostgreSQL (tabel activity_logs)
