@@ -28,7 +28,8 @@ module.exports = {
         PORT: 10003,
         NITRO_PORT: 10003,
         NITRO_HOST: '0.0.0.0',
-        HOST: '0.0.0.0'
+        HOST: '0.0.0.0',
+        BACKEND_URL: 'http://127.0.0.1:10002'
       }
     }
   ]

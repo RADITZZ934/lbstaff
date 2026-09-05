@@ -80,7 +80,7 @@ jobs:
             echo "NITRO_PORT=10003" >> web-dashboard/.env
             echo "NITRO_HOST=0.0.0.0" >> web-dashboard/.env
             echo "HOST=0.0.0.0" >> web-dashboard/.env
-            echo "BACKEND_URL=http://localhost:10002" >> web-dashboard/.env
+            echo "BACKEND_URL=http://127.0.0.1:10002" >> web-dashboard/.env
             echo "Generated default web-dashboard/.env"
           fi
 
@@ -95,7 +95,7 @@ jobs:
           NITRO_PORT: ${{ secrets.NITRO_PORT || '10003' }}
           NITRO_HOST: '0.0.0.0'
           HOST: '0.0.0.0'
-          BACKEND_URL: ${{ secrets.BACKEND_URL || 'http://localhost:10002' }}
+          BACKEND_URL: ${{ secrets.BACKEND_URL || 'http://127.0.0.1:10002' }}
           NUXT_PUBLIC_API_BASE: ${{ secrets.NUXT_PUBLIC_API_BASE || '' }}
           NODE_ENV: production
         run: |
