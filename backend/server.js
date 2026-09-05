@@ -22,6 +22,17 @@ const pool = new Pool({
     port: parseInt(process.env.DB_PORT || '5432', 10),
 });
 
+// Cek koneksi awal PostgreSQL
+pool.connect((err, client, release) => {
+    if (err) {
+        console.error('❌ [Database Error] Gagal terkoneksi ke PostgreSQL:', err.message);
+        console.error(`⚙️ [Config Terpakai] Host: ${process.env.DB_HOST || 'localhost'}, Port: ${process.env.DB_PORT || 5432}, User: ${process.env.DB_USER || 'postgres'}, Database: ${process.env.DB_NAME || 'lbstaff'}`);
+    } else {
+        console.log('✅ [Database OK] Berhasil terhubung ke database PostgreSQL');
+        release();
+    }
+});
+
 // 2. Konfigurasi Multer untuk Penyimpanan Dinamis
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
