@@ -5,5 +5,11 @@ export default defineEventHandler(async (event) => {
   const queryString = new URLSearchParams(query as Record<string, string>).toString()
   const target = `${backendBase}/api/${path}${queryString ? `?${queryString}` : ''}`
 
-  return proxyRequest(event, target)
+  return sendProxy(event, target, {
+    sendStream: true,
+    modifyRequestHeaders(event, headers) {
+      delete headers.host
+      return headers
+    }
+  })
 })

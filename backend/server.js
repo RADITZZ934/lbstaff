@@ -206,15 +206,29 @@ app.post('/api/stop-session', async (req, res) => {
 });
 
 // 3. Endpoint Endpoint API untuk Menerima Data
-app.post('/api/track', upload.single('screenshot'), async (req, res) => {
+app.post('/api/track', (req, res, next) => {
+    upload.single('screenshot')(req, res, (err) => {
+        if (err) {
+            console.error('⚠️ [Multer Upload Warning]:', err.message);
+        }
+        next();
+    });
+}, async (req, res) => {
     try {
-        const { user_id, time_entry_id, keyboard_clicks, mouse_moves, app_and_urls } = req.body;
+        const { user_id, time_entry_id, keyboard_clicks, mouse_moves, app_and_urls } = req.body || {};
 
         let screenshot_url = null;
         if (req.file) {
             const relPath = path.relative(UPLOADS_DIR, req.file.path).replace(/\\/g, '/');
             screenshot_url = `/uploads/${relPath}`;
             console.log(`[BERHASIL] File screenshot tersimpan di: ${req.file.path} (URL: ${screenshot_url})`);
+        }
+
+        let parsedApps = '[]';
+        if (typeof app_and_urls === 'string') {
+            parsedApps = app_and_urls;
+        } else if (Array.isArray(app_and_urls)) {
+            parsedApps = JSON.stringify(app_and_urls);
         }
 
         // Insert data ke PostgreSQL (tabel activity_logs)
@@ -226,24 +240,27 @@ app.post('/api/track', upload.single('screenshot'), async (req, res) => {
         `;
 
         const values = [
-            user_id,
+            user_id || 1,
             time_entry_id,
             screenshot_url,
-            keyboard_clicks || 0,
-            mouse_moves || 0,
-            app_and_urls || '[]' // JSONB
+            parseInt(keyboard_clicks || '0', 10),
+            parseInt(mouse_moves || '0', 10),
+            parsedApps
         ];
 
         const result = await pool.query(query, values);
 
+        console.log(`✅ [Log Disimpan] ID: ${result.rows[0].id} untuk User: ${user_id}, Sesi: ${time_entry_id}`);
+
         res.status(201).json({
+            success: true,
             message: 'Data aktivitas berhasil disimpan',
             log_id: result.rows[0].id
         });
 
     } catch (error) {
         console.error('Error saat menyimpan log:', error);
-        res.status(500).json({ error: 'Terjadi kesalahan pada server' });
+        res.status(500).json({ success: false, error: error.message || 'Terjadi kesalahan pada server' });
     }
 });
 

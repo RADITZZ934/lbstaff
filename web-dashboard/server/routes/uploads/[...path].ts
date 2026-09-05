@@ -3,5 +3,11 @@ export default defineEventHandler(async (event) => {
   const subPath = event.context.params?.path || ''
   const target = `${backendBase}/uploads/${subPath}`
 
-  return proxyRequest(event, target)
+  return sendProxy(event, target, {
+    sendStream: true,
+    modifyRequestHeaders(event, headers) {
+      delete headers.host
+      return headers
+    }
+  })
 })
