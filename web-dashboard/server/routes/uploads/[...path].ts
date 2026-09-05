@@ -1,7 +1,7 @@
 export default defineEventHandler(async (event) => {
-  const backendUrl = process.env.BACKEND_URL || 'http://127.0.0.1:10002'
+  const backendBase = (process.env.BACKEND_URL || 'http://127.0.0.1:10002').replace(/\/+$/, '')
   const subPath = event.context.params?.path || ''
-  const target = `${backendUrl}/uploads/${subPath}`
+  const target = `${backendBase}/uploads/${subPath}`
 
   return proxyRequest(event, target)
 })
