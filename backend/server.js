@@ -20,9 +20,55 @@ app.use((req, res, next) => {
 });
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Mengekspos folder fisik agar bisa diakses browser lewat awalan /uploads
-const UPLOADS_DIR = process.env.UPLOADS_DIR || (process.platform === 'win32' ? 'D:/lbstaff_uploads' : path.join(process.cwd(), 'uploads'));
-app.use('/uploads', express.static(UPLOADS_DIR));
+// Mengekspos folder fisik agar bisa diakses browser lewat awalan /uploads dan /upload
+const UPLOADS_DIR = path.resolve(process.env.UPLOADS_DIR || path.join(__dirname, 'uploads'));
+if (!fs.existsSync(UPLOADS_DIR)) {
+    fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+}
+
+// Fungsi helper pencarian file gambar di beberapa lokasi direktori potensial
+function findUploadFile(requestedPath) {
+    if (!requestedPath) return null;
+    let clean = requestedPath.replace(/\\/g, '/');
+    clean = clean.replace(/^https?:\/\/[^\/]+/, '');
+    clean = clean.replace(/^\/?(uploads|upload)\/?/, '');
+    clean = clean.split('?')[0];
+
+    const searchDirs = [
+        UPLOADS_DIR,
+        path.resolve(__dirname, 'uploads'),
+        path.resolve(__dirname, 'upload'),
+        path.resolve(__dirname, '../uploads'),
+        path.resolve(__dirname, '../upload'),
+        path.resolve(process.cwd(), 'uploads'),
+        path.resolve(process.cwd(), 'upload'),
+        path.resolve(process.cwd()),
+        'D:/lbstaff_uploads'
+    ];
+
+    for (const dir of searchDirs) {
+        if (!dir) continue;
+        const candidate = path.resolve(dir, clean);
+        if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+            return candidate;
+        }
+    }
+    return null;
+}
+
+app.use('/uploads', express.static(UPLOADS_DIR, { maxAge: '1d' }));
+app.use('/upload', express.static(UPLOADS_DIR, { maxAge: '1d' }));
+
+// Route fallback untuk /uploads/* dan /upload/* jika express.static melewatkannya
+app.get(['/uploads/*', '/upload/*'], (req, res) => {
+    const filePath = findUploadFile(req.path);
+    if (filePath) {
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        return res.sendFile(filePath);
+    }
+    console.warn(`⚠️ [Upload 404] Screenshot tidak ditemukan: ${req.path}`);
+    return res.status(404).send('Gambar screenshot tidak ditemukan');
+});
 
 // 1. Konfigurasi Koneksi PostgreSQL
 const pool = new Pool({
@@ -417,12 +463,13 @@ app.get('/api/user-activity/:nik/check-new', async (req, res) => {
 
 // --- API SERVE SCREENSHOT GAMBAR ---
 app.get('/api/screenshot', (req, res) => {
-    const filePath = req.query.path;
-    if (filePath && fs.existsSync(filePath)) {
-        res.sendFile(path.resolve(filePath));
-    } else {
-        res.status(404).send('Gambar tidak ditemukan');
+    const requestedPath = req.query.path || req.query.url;
+    const foundPath = findUploadFile(requestedPath);
+    if (foundPath) {
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        return res.sendFile(foundPath);
     }
+    return res.status(404).send('Gambar tidak ditemukan');
 });
 
 // Jalankan Server

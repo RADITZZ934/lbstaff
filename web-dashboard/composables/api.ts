@@ -34,12 +34,7 @@ export const useApi = () => {
     if (cleanPath.includes('lbstaff_uploads/')) {
       cleanPath = cleanPath.split('lbstaff_uploads/')[1]
     }
-    if (cleanPath.startsWith('uploads/')) {
-      cleanPath = cleanPath.replace('uploads/', '')
-    }
-    if (cleanPath.startsWith('/uploads/')) {
-      cleanPath = cleanPath.replace('/uploads/', '')
-    }
+    cleanPath = cleanPath.replace(/^\/?(uploads|upload)\/?/, '')
     return `/uploads/${cleanPath}`
   }
 
