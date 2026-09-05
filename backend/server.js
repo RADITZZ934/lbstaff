@@ -21,9 +21,21 @@ app.use((req, res, next) => {
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Mengekspos folder fisik agar bisa diakses browser lewat awalan /uploads dan /upload
-const UPLOADS_DIR = path.resolve(process.env.UPLOADS_DIR || path.join(__dirname, 'uploads'));
-if (!fs.existsSync(UPLOADS_DIR)) {
-    fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+let UPLOADS_DIR = path.resolve(process.env.UPLOADS_DIR || path.join(__dirname, 'uploads'));
+try {
+    if (!fs.existsSync(UPLOADS_DIR)) {
+        fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+    }
+} catch (err) {
+    console.warn(`⚠️ [UPLOADS_DIR Warning]: Gagal membuat ${UPLOADS_DIR} (${err.message}). Menggunakan folder lokal.`);
+    UPLOADS_DIR = path.resolve(__dirname, 'uploads');
+    try {
+        if (!fs.existsSync(UPLOADS_DIR)) {
+            fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+        }
+    } catch (e) {
+        console.error('❌ [UPLOADS_DIR Error]:', e.message);
+    }
 }
 
 // Fungsi helper pencarian file gambar di beberapa lokasi direktori potensial
@@ -56,11 +68,11 @@ function findUploadFile(requestedPath) {
     return null;
 }
 
-app.use('/uploads', express.static(UPLOADS_DIR, { maxAge: '1d' }));
-app.use('/upload', express.static(UPLOADS_DIR, { maxAge: '1d' }));
-
-// Route fallback untuk /uploads/* dan /upload/* jika express.static melewatkannya
-app.get(['/uploads/*', '/upload/*'], (req, res) => {
+// Middleware untuk melayani file screenshot dari berbagai direktori
+app.use(['/uploads', '/upload'], (req, res, next) => {
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+        return next();
+    }
     const filePath = findUploadFile(req.path);
     if (filePath) {
         res.setHeader('Cache-Control', 'public, max-age=86400');
