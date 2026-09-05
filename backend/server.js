@@ -115,7 +115,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage });
 
 // --- API OTENTIKASI (LOGIN DENGAN NIK) ---
-app.post('/api/login', async (req, res) => {
+app.all('/api/login', async (req, res) => {
     const nik = req.body?.nik || req.query?.nik;
 
     if (!nik) {
