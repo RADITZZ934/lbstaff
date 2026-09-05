@@ -12,8 +12,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  deploy-backend:
-    name: Deploy Backend to PM2 (Port 10002)
+  deploy:
+    name: Build & Deploy Backend + Frontend
     runs-on: self-hosted
 
     steps:
@@ -25,7 +25,7 @@ jobs:
         with:
           node-version: 22
 
-      - name: Setup Environment File (.env from secret)
+      - name: Setup Backend Environment (.env)
         shell: bash
         env:
           ENV_BACKEND: ${{ secrets.ENV_BACKEND }}
@@ -39,34 +39,7 @@ jobs:
             echo "Generated default backend/.env"
           fi
 
-      - name: Install Backend Dependencies
-        run: |
-          cd backend
-          npm install
-
-      - name: Deploy / Reload in PM2 (Port 10002)
-        env:
-          PORT: ${{ secrets.PORT || '10002' }}
-          NODE_ENV: production
-        run: |
-          npx pm2 delete lbstaff-backend || true
-          npx pm2 start ecosystem.config.cjs --only lbstaff-backend --update-env
-          npx pm2 save
-
-  deploy-frontend:
-    name: Deploy Web Dashboard to PM2 (Port 10003)
-    runs-on: self-hosted
-
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Setup Environment File (.env from secret)
+      - name: Setup Frontend Environment (.env)
         shell: bash
         env:
           ENV_FRONTEND: ${{ secrets.ENV_FRONTEND }}
@@ -84,12 +57,12 @@ jobs:
             echo "Generated default web-dashboard/.env"
           fi
 
-      - name: Install Frontend Dependencies
+      - name: Install Backend Dependencies
         run: |
-          cd web-dashboard
+          cd backend
           npm install
 
-      - name: Build Nuxt Dashboard
+      - name: Install Frontend Dependencies & Build Nuxt
         env:
           PORT: ${{ secrets.PORT || '10003' }}
           NITRO_PORT: ${{ secrets.NITRO_PORT || '10003' }}
@@ -100,16 +73,11 @@ jobs:
           NODE_ENV: production
         run: |
           cd web-dashboard
+          npm install
           npm run build
 
-      - name: Deploy / Reload in PM2 (Port 10003)
-        env:
-          PORT: ${{ secrets.PORT || '10003' }}
-          NITRO_PORT: ${{ secrets.NITRO_PORT || '10003' }}
-          NITRO_HOST: '0.0.0.0'
-          HOST: '0.0.0.0'
-          NODE_ENV: production
+      - name: Deploy / Reload in PM2
         run: |
-          npx pm2 delete lbstaff-frontend || true
-          npx pm2 start ecosystem.config.cjs --only lbstaff-frontend --update-env
+          npx pm2 delete lbstaff-backend lbstaff-frontend || true
+          npx pm2 start ecosystem.config.cjs --update-env
           npx pm2 save
