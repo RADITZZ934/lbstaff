@@ -33,6 +33,10 @@ export default defineEventHandler(async (event) => {
       resolve()
     })
 
-    event.node.req.pipe(clientReq)
+    if (event.method === 'GET' || event.method === 'HEAD') {
+      clientReq.end()
+    } else {
+      event.node.req.pipe(clientReq)
+    }
   })
 })
