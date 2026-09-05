@@ -44,7 +44,10 @@ function findUploadFile(requestedPath) {
     let clean = requestedPath.replace(/\\/g, '/');
     clean = clean.replace(/^https?:\/\/[^\/]+/, '');
     clean = clean.replace(/^\/?(uploads|upload)\/?/, '');
+    clean = clean.replace(/^[\/\\]+/, '');
     clean = clean.split('?')[0];
+
+    if (!clean) return null;
 
     const searchDirs = [
         UPLOADS_DIR,
