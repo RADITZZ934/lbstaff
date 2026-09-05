@@ -222,8 +222,10 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { useApi } from '~/composables/api'
 
 const route = useRoute()
+const { getApiUrl, resolveUploadUrl } = useApi()
 const nikKaryawan = computed(() => route.params.nik)
 
 // Variabel penyimpan jumlah data baru & waktu terakhir refresh
@@ -241,8 +243,8 @@ const selectedIndex = ref(0)
 const previewImage = ref(null)
 const previewTimestamp = ref('')
 
-// Panggil API untuk log aktivitas karyawan yang aktif saat ini
-const { data: apiResponse, pending, error, refresh } = await useFetch(() => `http://192.168.110.57:3001/api/user-activity/${nikKaryawan.value}`, {
+// Panggil API untuk log aktivitas karyawan yang aktif saat ini (via proxy / api)
+const { data: apiResponse, pending, error, refresh } = await useFetch(() => getApiUrl(`/api/user-activity/${nikKaryawan.value}`), {
   lazy: true
 })
 
@@ -279,7 +281,8 @@ const checkForNewLogs = async () => {
   if (!apiResponse.value?.success) return
 
   try {
-    const res = await $fetch(`http://192.168.110.57:3001/api/user-activity/${nikKaryawan.value}/check-new?last_time=${encodeURIComponent(lastRefreshTime.value)}`)
+    const url = getApiUrl(`/api/user-activity/${nikKaryawan.value}/check-new?last_time=${encodeURIComponent(lastRefreshTime.value)}`)
+    const res = await $fetch(url)
     if (res.success) {
       newLogsCount.value = res.new_count
     }
@@ -331,12 +334,7 @@ const closeModal = () => {
 }
 
 const resolveImage = (path) => {
-  if (!path) return ''
-  let cleanPath = path.replace(/\\/g, '/')
-  if (cleanPath.startsWith('http')) return cleanPath
-  if (cleanPath.includes('lbstaff_uploads/')) cleanPath = cleanPath.split('lbstaff_uploads/')[1]
-  if (cleanPath.startsWith('uploads/')) cleanPath = cleanPath.replace('uploads/', '')
-  return `http://192.168.110.57:3001/uploads/${cleanPath}`
+  return resolveUploadUrl(path)
 }
 
 const formatWaktu = (waktuISO) => {

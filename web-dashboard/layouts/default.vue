@@ -71,12 +71,14 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useApi } from '~/composables/api'
 
 const route = useRoute()
+const { getApiUrl } = useApi()
 const employeeSearchQuery = ref('')
 
 // Fetch employee directory (live-monitoring)
-const { data: employeesResponse, refresh } = await useFetch('http://192.168.110.57:3001/api/live-monitoring', {
+const { data: employeesResponse, refresh } = await useFetch(() => getApiUrl('/api/live-monitoring'), {
   lazy: true
 })
 

@@ -1,0 +1,72 @@
+name: Deploy Frontend (Self-Hosted)
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'web-dashboard/**'
+      - 'ecosystem.config.cjs'
+      - '.github/workflows/frontend.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy-frontend:
+    name: Deploy Web Dashboard to PM2 (Port 10003)
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Environment File (.env from secret)
+        shell: bash
+        env:
+          ENV_FRONTEND: ${{ secrets.ENV_FRONTEND }}
+        run: |
+          mkdir -p web-dashboard
+          if [ -n "$ENV_FRONTEND" ]; then
+            echo "$ENV_FRONTEND" > web-dashboard/.env
+            echo "Successfully generated web-dashboard/.env from GitHub Secret ENV_FRONTEND."
+          else
+            echo "PORT=10003" > web-dashboard/.env
+            echo "NITRO_PORT=10003" >> web-dashboard/.env
+            echo "NITRO_HOST=0.0.0.0" >> web-dashboard/.env
+            echo "HOST=0.0.0.0" >> web-dashboard/.env
+            echo "BACKEND_URL=http://localhost:10002" >> web-dashboard/.env
+            echo "Generated default web-dashboard/.env"
+          fi
+
+      - name: Install Frontend Dependencies
+        run: |
+          cd web-dashboard
+          npm install
+
+      - name: Build Nuxt Dashboard
+        env:
+          PORT: ${{ secrets.PORT || '10003' }}
+          NITRO_PORT: ${{ secrets.NITRO_PORT || '10003' }}
+          NITRO_HOST: '0.0.0.0'
+          HOST: '0.0.0.0'
+          BACKEND_URL: ${{ secrets.BACKEND_URL || 'http://localhost:10002' }}
+          NUXT_PUBLIC_API_BASE: ${{ secrets.NUXT_PUBLIC_API_BASE || '' }}
+          NODE_ENV: production
+        run: |
+          cd web-dashboard
+          npm run build
+
+      - name: Deploy / Reload in PM2 (Port 10003)
+        env:
+          PORT: ${{ secrets.PORT || '10003' }}
+          NITRO_PORT: ${{ secrets.NITRO_PORT || '10003' }}
+          NITRO_HOST: '0.0.0.0'
+          HOST: '0.0.0.0'
+          NODE_ENV: production
+        run: |
+          npx pm2 startOrReload ecosystem.config.cjs --only lbstaff-frontend --update-env || npx pm2 restart lbstaff-frontend --update-env || npx pm2 start web-dashboard/.output/server/index.mjs --name "lbstaff-frontend" --env PORT=10003,NITRO_PORT=10003,NITRO_HOST=0.0.0.0,HOST=0.0.0.0
+          npx pm2 save

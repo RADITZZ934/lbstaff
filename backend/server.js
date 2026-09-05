@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
@@ -8,16 +9,17 @@ const path = require('path');
 const app = express();
 app.use(cors());
 app.use(express.json());
-// Mengekspos folder fisik di Drive D agar bisa diakses browser lewat awalan /uploads
-app.use('/uploads', express.static('D:/lbstaff_uploads'));
+// Mengekspos folder fisik agar bisa diakses browser lewat awalan /uploads
+const UPLOADS_DIR = process.env.UPLOADS_DIR || (process.platform === 'win32' ? 'D:/lbstaff_uploads' : path.join(process.cwd(), 'uploads'));
+app.use('/uploads', express.static(UPLOADS_DIR));
 
 // 1. Konfigurasi Koneksi PostgreSQL
 const pool = new Pool({
-    user: 'postgres', // Sesuaikan dengan user DB Anda
-    host: 'localhost',
-    database: 'lbstaff',
-    password: 'postgres', // Sesuaikan password
-    port: 5432,
+    user: process.env.DB_USER || 'postgres',
+    host: process.env.DB_HOST || 'localhost',
+    database: process.env.DB_NAME || 'lbstaff',
+    password: process.env.DB_PASSWORD || 'postgres',
+    port: parseInt(process.env.DB_PORT || '5432', 10),
 });
 
 // 2. Konfigurasi Multer untuk Penyimpanan Dinamis
@@ -309,8 +311,7 @@ app.get('/api/screenshot', (req, res) => {
 });
 
 // Jalankan Server
-const PORT = 3001;
+const PORT = process.env.PORT || 10002;
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server berjalan di http://0.0.0.0:${PORT}`);
-    console.log(`(Bisa diakses jaringan lokal lewat IP IPv4 Anda: 192.168.110.57)`);
 });

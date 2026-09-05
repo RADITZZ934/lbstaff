@@ -50,9 +50,10 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted } from 'vue'
+import { useApi } from '~/composables/api'
 
-// Mengambil data dari backend Node.js (Pastikan portnya 3001)
-const { data: apiResponse, pending, refresh } = await useFetch('http://192.168.110.57:3001/api/live-monitoring', {
+const { getApiUrl } = useApi()
+const { data: apiResponse, pending, refresh } = await useFetch(() => getApiUrl('/api/live-monitoring'), {
   lazy: true // Membiarkan halaman dimuat dulu sambil menunggu data
 })
 
