@@ -49,7 +49,8 @@ jobs:
           PORT: ${{ secrets.PORT || '10002' }}
           NODE_ENV: production
         run: |
-          npx pm2 startOrReload ecosystem.config.cjs --only lbstaff-backend --update-env || npx pm2 restart lbstaff-backend --update-env || npx pm2 start backend/server.js --name "lbstaff-backend" --env PORT=10002
+          npx pm2 delete lbstaff-backend || true
+          npx pm2 start ecosystem.config.cjs --only lbstaff-backend --update-env
           npx pm2 save
 
   deploy-frontend:
@@ -109,5 +110,6 @@ jobs:
           HOST: '0.0.0.0'
           NODE_ENV: production
         run: |
-          npx pm2 startOrReload ecosystem.config.cjs --only lbstaff-frontend --update-env || npx pm2 restart lbstaff-frontend --update-env || npx pm2 start web-dashboard/.output/server/index.mjs --name "lbstaff-frontend" --env PORT=10003,NITRO_PORT=10003,NITRO_HOST=0.0.0.0,HOST=0.0.0.0
+          npx pm2 delete lbstaff-frontend || true
+          npx pm2 start ecosystem.config.cjs --only lbstaff-frontend --update-env
           npx pm2 save
