@@ -5,7 +5,7 @@ const axios = require('axios');
 const FormData = require('form-data');
 
 // Konfigurasi URL Server Utama
-const SERVER_URL = process.env.SERVER_URL || 'http://lbstaff.u-u.my.id';
+const SERVER_URL = process.env.SERVER_URL || 'https://lbstaff.u-u.my.id';
 
 let mainWindow;
 let tray = null;
