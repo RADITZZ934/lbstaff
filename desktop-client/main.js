@@ -208,31 +208,28 @@ async function rekamDanKirim() {
         });
         const screen = sources[0];
 
-        // 2. Ubah gambar menjadi format JPG Buffer
+        // 2. Ubah gambar menjadi format JPG Buffer & Base64
         const imageBuffer = screen.thumbnail.toJPEG(60);
+        const screenshot_base64 = imageBuffer.toString('base64');
 
-        // 3. Siapkan form data dengan ID dinamis
-        const form = new FormData();
-        form.append('user_id', currentUser.id);
-        form.append('time_entry_id', currentTimeEntryId);
-        form.append('keyboard_clicks', '20');
-        form.append('mouse_moves', '15');
-
+        // 3. Siapkan payload JSON
         const appAndUrlsPayload = Object.values(aktivitasAplikasi);
         aktivitasAplikasi = {};
 
-        form.append('app_and_urls', JSON.stringify(appAndUrlsPayload));
-
-        form.append('screenshot', imageBuffer, {
-            filename: `capture_${Date.now()}.jpg`,
-            contentType: 'image/jpeg'
-        });
+        const payload = {
+            user_id: currentUser.id,
+            time_entry_id: currentTimeEntryId,
+            keyboard_clicks: 20,
+            mouse_moves: 15,
+            app_and_urls: appAndUrlsPayload,
+            screenshot_base64: screenshot_base64
+        };
 
         // 4. Kirim ke Server Backend
         console.log("Mengirim data ke server...");
-        const response = await axios.post(`${SERVER_URL}/api/track`, form, {
+        const response = await axios.post(`${SERVER_URL}/api/track`, payload, {
             headers: {
-                ...form.getHeaders()
+                'Content-Type': 'application/json'
             }
         });
 

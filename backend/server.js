@@ -215,13 +215,28 @@ app.post('/api/track', (req, res, next) => {
     });
 }, async (req, res) => {
     try {
-        const { user_id, time_entry_id, keyboard_clicks, mouse_moves, app_and_urls } = req.body || {};
+        const { user_id, time_entry_id, keyboard_clicks, mouse_moves, app_and_urls, screenshot_base64 } = req.body || {};
 
         let screenshot_url = null;
         if (req.file) {
             const relPath = path.relative(UPLOADS_DIR, req.file.path).replace(/\\/g, '/');
             screenshot_url = `/uploads/${relPath}`;
             console.log(`[BERHASIL] File screenshot tersimpan di: ${req.file.path} (URL: ${screenshot_url})`);
+        } else if (screenshot_base64) {
+            const date = new Date();
+            const monthYear = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+            const targetDir = path.join(UPLOADS_DIR, `karyawan_${user_id || 1}`, monthYear);
+            if (!fs.existsSync(targetDir)) {
+                fs.mkdirSync(targetDir, { recursive: true });
+            }
+            const filename = `screenshot_${Date.now()}.jpg`;
+            const fullPath = path.join(targetDir, filename);
+            const imageBuffer = Buffer.from(screenshot_base64.replace(/^data:image\/\w+;base64,/, ''), 'base64');
+            fs.writeFileSync(fullPath, imageBuffer);
+
+            const relPath = path.relative(UPLOADS_DIR, fullPath).replace(/\\/g, '/');
+            screenshot_url = `/uploads/${relPath}`;
+            console.log(`[BERHASIL Base64] File screenshot tersimpan di: ${fullPath} (URL: ${screenshot_url})`);
         }
 
         let parsedApps = '[]';
