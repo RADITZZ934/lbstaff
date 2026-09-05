@@ -1,10 +1,14 @@
 {
-  "name": "desktop-client",
+  "name": "onestaff",
+  "productName": "Onestaff",
   "version": "1.0.0",
-  "description": "",
+  "description": "Onestaff Desktop Tracker",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "build:exe": "electron-builder --win",
+    "build:portable": "electron-builder --win portable",
+    "build:installer": "electron-builder --win nsis"
   },
   "keywords": [],
   "author": "",
@@ -13,8 +17,48 @@
   "dependencies": {
     "active-win": "^8.2.1",
     "axios": "^1.19.0",
-    "electron": "^43.4.1",
     "form-data": "^4.0.6"
+  },
+  "devDependencies": {
+    "electron": "^43.4.1",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.onestaff.app",
+    "productName": "Onestaff",
+    "npmRebuild": false,
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Onestaff"
+    },
+    "files": [
+      "main.js",
+      "icon.png",
+      "views/**/*"
+    ]
   },
   "allowScripts": {
     "active-win@8.2.1": true

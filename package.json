@@ -5,6 +5,7 @@
   "scripts": {
     "dev:backend": "pnpm --filter backend start",
     "dev:dashboard": "pnpm --filter web-dashboard dev",
-    "dev:desktop": "pnpm --filter desktop-client start"
+    "dev:desktop": "pnpm --filter desktop-client start",
+    "build:desktop": "npm --prefix desktop-client run build:exe"
   }
 }

@@ -17,6 +17,11 @@ backend/uploads/
 .DS_Store
 Thumbs.db
 
+# Build outputs
+dist/
+desktop-client/dist/
+*.exe
+
 # IDEs and editors
 .idea/
 .vscode/

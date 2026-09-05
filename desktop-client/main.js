@@ -22,6 +22,7 @@ const nikFilePath = path.join(app.getPath('userData'), 'nik_tersimpan.txt');
 
 function createWindow() {
     mainWindow = new BrowserWindow({
+        title: 'Onestaff',
         width: 380,
         height: 480,
         show: false,
@@ -59,7 +60,6 @@ app.whenReady().then(() => {
     tray = new Tray(iconPath);
     
     const contextMenu = Menu.buildFromTemplate([
-        { label: 'Buka Dashboard', click: () => { mainWindow.show(); } },
         { 
             label: 'Ganti NIK / Logout', 
             click: async () => { 
@@ -71,18 +71,9 @@ app.whenReady().then(() => {
                 }
                 mainWindow.show(); // Munculkan form login
             } 
-        },
-        { type: 'separator' },
-        { 
-            label: 'Keluar Sepenuhnya', 
-            click: async () => { 
-                app.isQuiting = true;
-                await hentikanSesi(); 
-                app.quit(); 
-            } 
         }
     ]);
-    tray.setToolTip('desktop-client');
+    tray.setToolTip('Onestaff');
     tray.setContextMenu(contextMenu);
 
     app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true, path: app.getPath('exe') });
