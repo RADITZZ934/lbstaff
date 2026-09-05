@@ -11,7 +11,8 @@ module.exports = {
       max_memory_restart: '1G',
       env: {
         NODE_ENV: 'production',
-        PORT: 10002
+        PORT: 10002,
+        UPLOADS_DIR: process.env.UPLOADS_DIR || (process.platform === 'win32' ? 'D:/lbstaff_uploads' : '/home/radit/lbstaff_uploads')
       }
     },
     {

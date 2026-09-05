@@ -11,7 +11,10 @@ yarn-error.log*
 lerna-debug.log*
 
 # Uploads and user-generated content
-backend/uploads/
+/backend/uploads/
+/backend/upload/
+/uploads/
+/upload/
 
 # OS metadata
 .DS_Store
