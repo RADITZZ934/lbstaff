@@ -4,6 +4,9 @@ const fs = require('fs');
 const axios = require('axios');
 const FormData = require('form-data');
 
+// Konfigurasi URL Server Utama
+const SERVER_URL = process.env.SERVER_URL || 'http://lbstaff.u-u.my.id';
+
 let mainWindow;
 let tray = null;
 let aktivitasAplikasi = {};
@@ -100,7 +103,7 @@ app.whenReady().then(() => {
 // --- FUNGSI LOGIN LANGSUNG DARI MAIN.JS ---
 async function loginDariLatarBelakang(nik) {
     try {
-        const response = await axios.post('http://192.168.110.57:3001/api/login', { nik });
+        const response = await axios.post(`${SERVER_URL}/api/login`, { nik });
         
         if (response.data.success) {
             currentUser = response.data.user;
@@ -227,7 +230,7 @@ async function rekamDanKirim() {
 
         // 4. Kirim ke Server Backend
         console.log("Mengirim data ke server...");
-        const response = await axios.post('http://192.168.110.57:3001/api/track', form, {
+        const response = await axios.post(`${SERVER_URL}/api/track`, form, {
             headers: {
                 ...form.getHeaders()
             }
@@ -247,7 +250,7 @@ async function hentikanSesi() {
 
     try {
         console.log("Menghentikan sesi kerja di database...");
-        await axios.post('http://192.168.110.57:3001/api/stop-session', {
+        await axios.post(`${SERVER_URL}/api/stop-session`, {
             time_entry_id: currentTimeEntryId
         });
         console.log("✅ Sesi kerja berhasil ditutup.");
