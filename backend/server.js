@@ -246,6 +246,23 @@ app.post('/api/track', (req, res, next) => {
             parsedApps = JSON.stringify(app_and_urls);
         }
 
+        let activeTimeEntryId = time_entry_id ? parseInt(time_entry_id, 10) : null;
+        if (!activeTimeEntryId || isNaN(activeTimeEntryId)) {
+            const sessionCheck = await pool.query(
+                'SELECT id FROM time_entries WHERE user_id = $1 AND end_time IS NULL ORDER BY start_time DESC LIMIT 1',
+                [user_id || 1]
+            );
+            if (sessionCheck.rows.length > 0) {
+                activeTimeEntryId = sessionCheck.rows[0].id;
+            } else {
+                const newSession = await pool.query(
+                    'INSERT INTO time_entries (user_id, start_time) VALUES ($1, NOW()) RETURNING id',
+                    [user_id || 1]
+                );
+                activeTimeEntryId = newSession.rows[0].id;
+            }
+        }
+
         // Insert data ke PostgreSQL (tabel activity_logs)
         const query = `
             INSERT INTO activity_logs 
@@ -256,7 +273,7 @@ app.post('/api/track', (req, res, next) => {
 
         const values = [
             user_id || 1,
-            time_entry_id,
+            activeTimeEntryId,
             screenshot_url,
             parseInt(keyboard_clicks || '0', 10),
             parseInt(mouse_moves || '0', 10),
