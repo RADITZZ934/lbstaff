@@ -8,7 +8,18 @@ const path = require('path');
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+
+// Body parser aman yang menangani JSON dan form data tanpa crash 400 HTML
+app.use((req, res, next) => {
+    express.json({ limit: '50mb' })(req, res, (err) => {
+        if (err) {
+            console.error('⚠️ [JSON Parse Warning]:', err.message);
+        }
+        next();
+    });
+});
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
 // Mengekspos folder fisik agar bisa diakses browser lewat awalan /uploads
 const UPLOADS_DIR = process.env.UPLOADS_DIR || (process.platform === 'win32' ? 'D:/lbstaff_uploads' : path.join(process.cwd(), 'uploads'));
 app.use('/uploads', express.static(UPLOADS_DIR));
@@ -105,7 +116,7 @@ const upload = multer({ storage: storage });
 
 // --- API OTENTIKASI (LOGIN DENGAN NIK) ---
 app.post('/api/login', async (req, res) => {
-    const { nik } = req.body;
+    const nik = req.body?.nik || req.query?.nik;
 
     if (!nik) {
         return res.status(400).json({ success: false, message: 'NIK tidak boleh kosong' });
@@ -161,7 +172,7 @@ app.post('/api/login', async (req, res) => {
 
 // --- API OTENTIKASI (LOGOUT / STOP SESI) ---
 app.post('/api/stop-session', async (req, res) => {
-    const { time_entry_id } = req.body;
+    const time_entry_id = req.body?.time_entry_id || req.query?.time_entry_id;
 
     if (!time_entry_id) {
         return res.status(400).json({ success: false, message: 'ID Sesi tidak ditemukan' });
