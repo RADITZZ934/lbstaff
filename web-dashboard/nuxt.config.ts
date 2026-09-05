@@ -41,14 +41,6 @@ export default defineNuxtConfig({
       apiBase: process.env.NUXT_PUBLIC_API_BASE || '/api'
     }
   },
-  routeRules: {
-    '/api/**': {
-      proxy: 'http://127.0.0.1:10002/api/**'
-    },
-    '/uploads/**': {
-      proxy: 'http://127.0.0.1:10002/uploads/**'
-    }
-  },
   app: {
     head: {
       link: [
