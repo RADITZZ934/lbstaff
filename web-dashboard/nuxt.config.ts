@@ -34,7 +34,7 @@ if (typeof Set !== 'undefined') {
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
-  devtools: { enabled: true },
+  devtools: { enabled: false },
   runtimeConfig: {
     backendUrl: process.env.BACKEND_URL || 'http://127.0.0.1:10002',
     public: {
@@ -43,10 +43,10 @@ export default defineNuxtConfig({
   },
   routeRules: {
     '/api/**': {
-      proxy: `${process.env.BACKEND_URL || 'http://127.0.0.1:10002'}/api/**`
+      proxy: 'http://127.0.0.1:10002/api/**'
     },
     '/uploads/**': {
-      proxy: `${process.env.BACKEND_URL || 'http://127.0.0.1:10002'}/uploads/**`
+      proxy: 'http://127.0.0.1:10002/uploads/**'
     }
   },
   app: {
