@@ -58,6 +58,7 @@ let isOfflineMode = false;
 // Batas waktu menganggur sebelum perekaman dijeda (300 detik = 5 menit)
 const IDLE_THRESHOLD_SECONDS = 300; 
 let isIdle = false; // Penanda status saat ini
+let isScreenLocked = false; // Penanda status layar terkunci (lock screen / suspend)
 
 // Konfigurasi Interval Waktu
 const SCREENSHOT_INTERVAL_MS = 5 * 60 * 1000; // 5 menit sekali
@@ -287,9 +288,28 @@ app.whenReady().then(() => {
         }
     ]);
     tray.setContextMenu(contextMenu);
-    updateTrayStatus();
-
     app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true, path: app.getPath('exe') });
+
+    // --- DETEKSI LAYAR KUNCI & MODE TIDUR WINDOWS ---
+    powerMonitor.on('lock-screen', () => {
+        isScreenLocked = true;
+        console.log('🔒 [Sistem] Layar Windows terkunci. Perekaman dijeda.');
+    });
+
+    powerMonitor.on('unlock-screen', () => {
+        isScreenLocked = false;
+        console.log('🔓 [Sistem] Layar Windows dibuka. Perekaman dilanjutkan.');
+    });
+
+    powerMonitor.on('suspend', () => {
+        isScreenLocked = true;
+        console.log('💤 [Sistem] Perangkat masuk mode tidur (sleep/suspend). Perekaman dijeda.');
+    });
+
+    powerMonitor.on('resume', () => {
+        isScreenLocked = false;
+        console.log('⚡ [Sistem] Perangkat bangun dari mode tidur (resume). Perekaman dilanjutkan.');
+    });
 
     // --- LOGIKA STARTUP: AUTO-LOGIN & OFFLINE-FIRST ---
     if (fs.existsSync(nikFilePath)) {
@@ -537,7 +557,12 @@ async function pantauJendelaAktif() {
 async function rekamDanKirim() {
     if (!currentUser) return;
 
-    // --- 1. LOGIKA DETEKSI IDLE (MENGANGGUR) ---
+    // --- 1. LOGIKA DETEKSI IDLE & LAYAR TERKUNCI ---
+    if (isScreenLocked) {
+        console.log('🔒 [Layar Terkunci] Layar sedang terkunci atau sistem sleep. Perekaman dijeda...');
+        return;
+    }
+
     const idleTime = powerMonitor.getSystemIdleTime();
     
     if (idleTime >= IDLE_THRESHOLD_SECONDS) {
@@ -561,9 +586,24 @@ async function rekamDanKirim() {
             types: ['screen'],
             thumbnailSize: { width: 854, height: 480 }
         });
+
+        if (!sources || sources.length === 0) {
+            console.warn("⚠️ [Screenshot Gagal] Layar/display tidak ditemukan atau belum siap. Melewatkan interval ini...");
+            return;
+        }
+
         const screen = sources[0];
+        if (!screen || !screen.thumbnail || screen.thumbnail.isEmpty()) {
+            console.warn("⚠️ [Screenshot Gagal] Gambar kosong (layar sedang terkunci / secure desktop / UAC). Melewatkan interval ini...");
+            return;
+        }
 
         const imageBuffer = screen.thumbnail.toJPEG(60);
+        if (!imageBuffer || imageBuffer.length === 0) {
+            console.warn("⚠️ [Screenshot Gagal] Ukuran buffer gambar 0 byte. Melewatkan interval ini...");
+            return;
+        }
+
         const screenshot_base64 = imageBuffer.toString('base64');
 
         const appAndUrlsPayload = Object.values(aktivitasAplikasi);
