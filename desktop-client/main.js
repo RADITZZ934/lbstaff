@@ -15,10 +15,16 @@ let aktivitasAplikasi = {};
 let currentUser = null;
 let currentTimeEntryId = null;
 
-// Batas waktu menganggur sebelum perekaman dijeda (contoh: 300 detik = 5 menit)
-// Untuk keperluan TESTING saat ini, mari kita set ke 15 detik saja agar cepat terlihat hasilnya
-const IDLE_THRESHOLD_SECONDS = 15; 
+// Batas waktu menganggur sebelum perekaman dijeda (300 detik = 5 menit)
+const IDLE_THRESHOLD_SECONDS = 300; 
 let isIdle = false; // Penanda status saat ini
+
+// Konfigurasi Interval Waktu
+const SCREENSHOT_INTERVAL_MS = 5 * 60 * 1000; // 5 menit sekali
+const RETRY_LOGIN_INTERVAL_MS = 30 * 1000;    // Coba lagi setiap 30 detik jika offline
+
+let isLoggingIn = false;
+let retryLoginTimeout = null;
 
 // Tentukan lokasi file txt yang aman di sistem Windows
 const nikFilePath = path.join(app.getPath('userData'), 'nik_tersimpan.txt');
@@ -66,8 +72,13 @@ app.whenReady().then(() => {
         { 
             label: 'Ganti NIK / Logout', 
             click: async () => { 
+                if (retryLoginTimeout) {
+                    clearTimeout(retryLoginTimeout);
+                    retryLoginTimeout = null;
+                }
                 await hentikanSesi(); 
                 currentUser = null; 
+                currentTimeEntryId = null;
                 // Hapus file txt saat logout
                 if (fs.existsSync(nikFilePath)) {
                     fs.unlinkSync(nikFilePath);
@@ -96,14 +107,23 @@ app.whenReady().then(() => {
         mainWindow.show();
     }
 
-    setInterval(rekamDanKirim, 15000);
+    setInterval(rekamDanKirim, SCREENSHOT_INTERVAL_MS);
     setInterval(pantauJendelaAktif, 1000);
 });
 
-// --- FUNGSI LOGIN LANGSUNG DARI MAIN.JS ---
+// --- FUNGSI LOGIN LANGSUNG DARI MAIN.JS DENGAN RETRY OTOMATIS ---
 async function loginDariLatarBelakang(nik) {
+    if (currentUser || isLoggingIn) return;
+    isLoggingIn = true;
+
+    if (retryLoginTimeout) {
+        clearTimeout(retryLoginTimeout);
+        retryLoginTimeout = null;
+    }
+
     try {
-        const response = await axios.post(`${SERVER_URL}/api/login`, { nik });
+        console.log(`[Auto-Login] Menghubungi server (${SERVER_URL})...`);
+        const response = await axios.post(`${SERVER_URL}/api/login`, { nik }, { timeout: 15000 });
         
         if (response.data.success) {
             currentUser = response.data.user;
@@ -111,17 +131,27 @@ async function loginDariLatarBelakang(nik) {
             console.log(`✅ [Auto-Login Sukses] Masuk sebagai: ${currentUser.name}`);
             // Karena sukses, jendela tetap tersembunyi.
         } else {
-            console.log('❌ [Auto-Login Gagal] NIK tidak valid. Menampilkan form.');
+            console.log(`❌ [Auto-Login Gagal] NIK tidak valid atau ditolak server: ${response.data.message || ''}. Menampilkan form.`);
             mainWindow.show();
         }
     } catch (error) {
-        console.error('❌ [Auto-Login Error] Server mati atau tidak ada internet.');
-        mainWindow.show();
+        console.error(`⚠️ [Auto-Login Error] Koneksi belum siap atau offline (${error.message}).`);
+        console.log(`🔄 Menjadwalkan coba ulang (retry) dalam 30 detik...`);
+        // Jendela tetap disembunyikan, coba lagi 30 detik kemudian
+        retryLoginTimeout = setTimeout(() => {
+            loginDariLatarBelakang(nik);
+        }, RETRY_LOGIN_INTERVAL_MS);
+    } finally {
+        isLoggingIn = false;
     }
 }
 
 // --- MENERIMA DATA DARI FORM LOGIN MANUAL (index.html) ---
 ipcMain.on('login-sukses', (event, data) => {
+    if (retryLoginTimeout) {
+        clearTimeout(retryLoginTimeout);
+        retryLoginTimeout = null;
+    }
     currentUser = data.user;
     currentTimeEntryId = data.time_entry_id;
 
