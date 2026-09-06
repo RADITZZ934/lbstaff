@@ -276,7 +276,15 @@ app.post('/api/track', (req, res, next) => {
     });
 }, async (req, res) => {
     try {
-        const { user_id, time_entry_id, keyboard_clicks, mouse_moves, app_and_urls, screenshot_base64 } = req.body || {};
+        const { user_id, time_entry_id, keyboard_clicks, mouse_moves, app_and_urls, screenshot_base64, recorded_at } = req.body || {};
+
+        let logTimestamp = new Date();
+        if (recorded_at) {
+            const parsedDate = new Date(recorded_at);
+            if (!isNaN(parsedDate.getTime())) {
+                logTimestamp = parsedDate;
+            }
+        }
 
         let screenshot_url = null;
         if (req.file) {
@@ -284,13 +292,13 @@ app.post('/api/track', (req, res, next) => {
             screenshot_url = `/uploads/${relPath}`;
             console.log(`[BERHASIL] File screenshot tersimpan di: ${req.file.path} (URL: ${screenshot_url})`);
         } else if (screenshot_base64) {
-            const date = new Date();
+            const date = logTimestamp;
             const monthYear = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
             const targetDir = path.join(UPLOADS_DIR, `karyawan_${user_id || 1}`, monthYear);
             if (!fs.existsSync(targetDir)) {
                 fs.mkdirSync(targetDir, { recursive: true });
             }
-            const filename = `screenshot_${Date.now()}.jpg`;
+            const filename = `screenshot_${Date.now()}_${Math.floor(Math.random() * 1000)}.jpg`;
             const fullPath = path.join(targetDir, filename);
             const imageBuffer = Buffer.from(screenshot_base64.replace(/^data:image\/\w+;base64,/, ''), 'base64');
             fs.writeFileSync(fullPath, imageBuffer);
@@ -328,13 +336,14 @@ app.post('/api/track', (req, res, next) => {
         const query = `
             INSERT INTO activity_logs 
             (user_id, time_entry_id, recorded_at, screenshot_url, keyboard_clicks, mouse_moves, app_and_urls) 
-            VALUES ($1, $2, NOW(), $3, $4, $5, $6) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7) 
             RETURNING id;
         `;
 
         const values = [
             user_id || 1,
             activeTimeEntryId,
+            logTimestamp,
             screenshot_url,
             parseInt(keyboard_clicks || '0', 10),
             parseInt(mouse_moves || '0', 10),
@@ -343,7 +352,7 @@ app.post('/api/track', (req, res, next) => {
 
         const result = await pool.query(query, values);
 
-        console.log(`✅ [Log Disimpan] ID: ${result.rows[0].id} untuk User: ${user_id}, Sesi: ${time_entry_id}`);
+        console.log(`✅ [Log Disimpan] ID: ${result.rows[0].id} untuk User: ${user_id}, Sesi: ${activeTimeEntryId} (Waktu: ${logTimestamp.toISOString()})`);
 
         res.status(201).json({
             success: true,
@@ -360,7 +369,7 @@ app.post('/api/track', (req, res, next) => {
 // --- API LIVE MONITORING (KARYAWAN AKTIF) ---
 app.get('/api/live-monitoring', async (req, res) => {
     try {
-        // Query untuk mengambil HANYA sesi paling baru dari setiap karyawan beserta status aktivitasnya
+        // Query untuk mengambil sesi paling baru dari setiap karyawan beserta status aktivitasnya
         const query = `
             SELECT DISTINCT ON (u.nik)
                 u.name, 
@@ -370,13 +379,14 @@ app.get('/api/live-monitoring', async (req, res) => {
                 CASE 
                     WHEN t.end_time IS NOT NULL THEN 999999
                     ELSE EXTRACT(EPOCH FROM (NOW() - COALESCE(
-                        (SELECT MAX(recorded_at) FROM activity_logs WHERE time_entry_id = t.id),
-                        t.start_time
+                        (SELECT MAX(recorded_at) FROM activity_logs WHERE user_id = u.id),
+                        t.start_time,
+                        NOW()
                     )))::INTEGER
                 END as seconds_since_last_activity
             FROM users u
-            JOIN time_entries t ON u.id = t.user_id
-            ORDER BY u.nik, t.start_time DESC;
+            LEFT JOIN time_entries t ON u.id = t.user_id
+            ORDER BY u.nik, t.start_time DESC NULLS LAST;
         `;
 
         const result = await pool.query(query);
@@ -394,38 +404,69 @@ app.get('/api/live-monitoring', async (req, res) => {
 // --- API DETAIL AKTIVITAS KARYAWAN BERDASARKAN NIK ---
 app.get('/api/user-activity/:nik', async (req, res) => {
     const { nik } = req.params;
+    const { session_id, limit = 100 } = req.query;
 
     try {
-        // 1. Cari data user dan sesi aktifnya
-        const sessionQuery = `
-            SELECT u.name, u.nik, t.id as time_entry_id, t.start_time
+        // 1. Cari data user dan sesi terbarunya
+        const userQuery = `
+            SELECT u.id as user_id, u.name, u.nik, t.id as time_entry_id, t.start_time, t.end_time
             FROM users u
-            JOIN time_entries t ON u.id = t.user_id
-            WHERE u.nik = $1 AND t.end_time IS NULL
-            ORDER BY t.start_time DESC   -- <-- TAMBAHKAN BARIS INI
+            LEFT JOIN time_entries t ON u.id = t.user_id
+            WHERE u.nik = $1
+            ORDER BY (t.end_time IS NULL) DESC, t.start_time DESC NULLS LAST
             LIMIT 1;
         `;
-        const sessionResult = await pool.query(sessionQuery, [nik]);
+        const userResult = await pool.query(userQuery, [nik]);
 
-        if (sessionResult.rows.length === 0) {
-            return res.status(404).json({ success: false, message: 'Karyawan tidak ditemukan atau tidak ada sesi aktif.' });
+        if (userResult.rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Karyawan tidak ditemukan.' });
         }
 
-        const activeSession = sessionResult.rows[0];
+        const activeUser = userResult.rows[0];
 
-        // 2. Ambil log aktivitas (screenshot & app/urls) untuk sesi tersebut
-        const logsQuery = `
-            SELECT id, screenshot_url, screenshot_url AS screenshot_path, app_and_urls, recorded_at, recorded_at AS created_at, keyboard_clicks, mouse_moves
-            FROM activity_logs
-            WHERE time_entry_id = $1
-            ORDER BY recorded_at DESC
-            LIMIT 50; -- Membatasi 50 aktivitas terbaru agar ringan
+        // 2. Ambil riwayat sesi-sesi kerja (untuk opsi filter di frontend)
+        const sessionsQuery = `
+            SELECT id, start_time, end_time, total_duration_seconds
+            FROM time_entries
+            WHERE user_id = $1
+            ORDER BY start_time DESC
+            LIMIT 20;
         `;
-        const logsResult = await pool.query(logsQuery, [activeSession.time_entry_id]);
+        const sessionsResult = await pool.query(sessionsQuery, [activeUser.user_id]);
+
+        // 3. Ambil log aktivitas (screenshot & app/urls):
+        // Jika session_id dispesifikasikan (dan bukan 'all'), filter per sesi.
+        // Jika 'all' atau tidak dispesifikasikan (default), tampilkan SEMUA aktivitas karyawan tersebut lintas sesi agar tidak ter-reset saat laptop restart!
+        let logsQuery = '';
+        let queryParams = [];
+
+        if (session_id && session_id !== 'all') {
+            const targetSessionId = session_id === 'current' ? activeUser.time_entry_id : parseInt(session_id, 10);
+            logsQuery = `
+                SELECT id, time_entry_id, screenshot_url, screenshot_url AS screenshot_path, app_and_urls, recorded_at, recorded_at AS created_at, keyboard_clicks, mouse_moves
+                FROM activity_logs
+                WHERE user_id = $1 AND time_entry_id = $2
+                ORDER BY recorded_at DESC
+                LIMIT $3;
+            `;
+            queryParams = [activeUser.user_id, targetSessionId, parseInt(limit, 10)];
+        } else {
+            logsQuery = `
+                SELECT id, time_entry_id, screenshot_url, screenshot_url AS screenshot_path, app_and_urls, recorded_at, recorded_at AS created_at, keyboard_clicks, mouse_moves
+                FROM activity_logs
+                WHERE user_id = $1
+                ORDER BY recorded_at DESC
+                LIMIT $2;
+            `;
+            queryParams = [activeUser.user_id, parseInt(limit, 10)];
+        }
+
+        const logsResult = await pool.query(logsQuery, queryParams);
 
         res.json({
             success: true,
-            user: activeSession,
+            user: activeUser,
+            sessions: sessionsResult.rows,
             logs: logsResult.rows
         });
     } catch (error) {
@@ -437,38 +478,42 @@ app.get('/api/user-activity/:nik', async (req, res) => {
 // --- API CEK JUMLAH LOG BARU (POLLING) ---
 app.get('/api/user-activity/:nik/check-new', async (req, res) => {
     const { nik } = req.params;
-    const { last_time } = req.query; // Waktu dari screenshot teratas di browser
+    const { last_time, session_id } = req.query; // Waktu dari screenshot teratas di browser
 
     try {
-        // 1. Cari sesi aktif karyawan
-        const sessionQuery = `
-            SELECT t.id as time_entry_id, t.start_time
-            FROM users u
-            JOIN time_entries t ON u.id = t.user_id
-            WHERE u.nik = $1 AND t.end_time IS NULL
-            ORDER BY t.start_time DESC   -- <-- TAMBAHKAN BARIS INI
-            LIMIT 1;
-        `;
-        const sessionResult = await pool.query(sessionQuery, [nik]);
+        const userQuery = `SELECT id FROM users WHERE nik = $1 LIMIT 1;`;
+        const userResult = await pool.query(userQuery, [nik]);
 
-        // Jika tidak ada sesi aktif atau waktu tidak dikirim
-        if (sessionResult.rows.length === 0 || !last_time) {
+        if (userResult.rows.length === 0 || !last_time) {
             return res.json({ success: true, new_count: 0 });
         }
 
-        const timeEntryId = sessionResult.rows[0].time_entry_id;
+        const userId = userResult.rows[0].id;
 
-        // 2. Hitung jumlah log yang masuk setelah 'last_time'
-        const countQuery = `
-            SELECT COUNT(*) 
-            FROM activity_logs 
-            WHERE time_entry_id = $1 AND recorded_at > $2;
-        `;
-        const countResult = await pool.query(countQuery, [timeEntryId, last_time]);
+        let countQuery = '';
+        let countParams = [];
+
+        if (session_id && session_id !== 'all') {
+            countQuery = `
+                SELECT COUNT(*)::INTEGER as count
+                FROM activity_logs
+                WHERE user_id = $1 AND time_entry_id = $2 AND recorded_at > $3;
+            `;
+            countParams = [userId, parseInt(session_id, 10), last_time];
+        } else {
+            countQuery = `
+                SELECT COUNT(*)::INTEGER as count
+                FROM activity_logs
+                WHERE user_id = $1 AND recorded_at > $2;
+            `;
+            countParams = [userId, last_time];
+        }
+
+        const countResult = await pool.query(countQuery, countParams);
 
         res.json({
             success: true,
-            new_count: parseInt(countResult.rows[0].count)
+            new_count: parseInt(countResult.rows[0].count, 10) || 0
         });
     } catch (error) {
         console.error('Error saat mengecek log baru:', error);

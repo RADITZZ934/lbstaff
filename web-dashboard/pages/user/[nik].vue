@@ -23,41 +23,66 @@
       <div class="user-profile">
         <div class="avatar-huge">{{ apiResponse.user.name.charAt(0).toUpperCase() }}</div>
         <div>
-          <h1>{{ apiResponse.user.name }}</h1>
-          <p class="subtitle">NIK: {{ apiResponse.user.nik }} | Mulai Shift: {{ formatWaktu(apiResponse.user.start_time) }}</p>
+          <div class="profile-header-row">
+            <h1>{{ apiResponse.user.name }}</h1>
+            <span v-if="!apiResponse.user.end_time" class="status-pill active">
+              <span class="pulse-dot"></span> Sesi Aktif
+            </span>
+            <span v-else class="status-pill offline">
+              <span class="offline-dot"></span> Sesi Selesai
+            </span>
+          </div>
+          <p class="subtitle">
+            NIK: {{ apiResponse.user.nik }} | 
+            Mulai Shift: {{ formatWaktu(apiResponse.user.start_time) }} | 
+            Total: {{ apiResponse.logs?.length || 0 }} rekaman
+          </p>
         </div>
       </div>
 
-      <!-- Toolbar Pilihan Tampilan Grid / Layout -->
+      <!-- Toolbar Pilihan Tampilan & Filter Sesi -->
       <div class="layout-selector-card">
-        <span class="selector-label">Pilihan Tampilan:</span>
-        <div class="selector-buttons">
-          <button 
-            :class="['btn-layout', { active: currentLayout === 'split' }]" 
-            @click="currentLayout = 'split'"
-            title="Tampilan Split ala YouTube"
-          >
-            Split
-          </button>
-          <button 
-            :class="['btn-layout', { active: currentLayout === 'grid' }]" 
-            @click="currentLayout = 'grid'"
-            title="Tampilan Grid Grid Asli"
-          >
-            Grid
-          </button>
-          <button 
-            :class="['btn-layout', { active: currentLayout === 'list' }]" 
-            @click="currentLayout = 'list'"
-            title="Tampilan List Kompak"
-          >
-            List
-          </button>
+        <div class="filter-group">
+          <label for="sessionFilter" class="selector-label">Filter Riwayat:</label>
+          <select id="sessionFilter" v-model="selectedSessionFilter" class="session-select" @change="handleSessionChange">
+            <option value="all">Semua Riwayat (Semua Sesi)</option>
+            <option value="current">Sesi Aktif Terakhir</option>
+            <option v-for="session in apiResponse.sessions" :key="session.id" :value="session.id">
+              Sesi #{{ session.id }} ({{ formatTanggalSesi(session.start_time) }})
+            </option>
+          </select>
+        </div>
+
+        <div class="view-group">
+          <span class="selector-label">Pilihan Tampilan:</span>
+          <div class="selector-buttons">
+            <button 
+              :class="['btn-layout', { active: currentLayout === 'split' }]" 
+              @click="currentLayout = 'split'"
+              title="Tampilan Split ala YouTube"
+            >
+              Split
+            </button>
+            <button 
+              :class="['btn-layout', { active: currentLayout === 'grid' }]" 
+              @click="currentLayout = 'grid'"
+              title="Tampilan Grid Grid Asli"
+            >
+              Grid
+            </button>
+            <button 
+              :class="['btn-layout', { active: currentLayout === 'list' }]" 
+              @click="currentLayout = 'list'"
+              title="Tampilan List Kompak"
+            >
+              List
+            </button>
+          </div>
         </div>
       </div>
 
       <div v-if="!apiResponse.logs || apiResponse.logs.length === 0" class="empty-state">
-        <p>Belum ada aktivitas terekam. Aplikasi merekam setiap 15 detik.</p>
+        <p>Belum ada aktivitas terekam untuk filter sesi yang dipilih.</p>
       </div>
 
       <div v-else>
@@ -236,6 +261,9 @@ let pollingInterval = null
 // Pilihan Layout Aktif: 'split', 'grid', 'list'
 const currentLayout = ref('split')
 
+// Filter Riwayat Sesi: 'all' (semua screenshot lintas sesi), 'current', atau ID sesi tertentu
+const selectedSessionFilter = ref('all')
+
 // Indeks log yang sedang dipilih (untuk Split Layout)
 const selectedIndex = ref(0)
 
@@ -243,8 +271,14 @@ const selectedIndex = ref(0)
 const previewImage = ref(null)
 const previewTimestamp = ref('')
 
-// Panggil API untuk log aktivitas karyawan yang aktif saat ini (via proxy / api)
-const { data: apiResponse, pending, error, refresh } = await useFetch(() => getApiUrl(`/api/user-activity/${nikKaryawan.value}`), {
+// URL dinamis berdasarkan NIK dan filter sesi yang dipilih
+const apiUrl = computed(() => {
+  const query = selectedSessionFilter.value !== 'all' ? `?session_id=${encodeURIComponent(selectedSessionFilter.value)}` : ''
+  return getApiUrl(`/api/user-activity/${nikKaryawan.value}${query}`)
+})
+
+// Panggil API untuk log aktivitas karyawan
+const { data: apiResponse, pending, error, refresh } = await useFetch(() => apiUrl.value, {
   lazy: true
 })
 
@@ -252,9 +286,17 @@ const { data: apiResponse, pending, error, refresh } = await useFetch(() => getA
 watch(nikKaryawan, async (newNik) => {
   if (newNik) {
     selectedIndex.value = 0
+    selectedSessionFilter.value = 'all'
     await refresh()
   }
 })
+
+// Fungsi saat filter sesi diubah oleh pengguna
+const handleSessionChange = async () => {
+  selectedIndex.value = 0
+  await refresh()
+  lastRefreshTime.value = getLatestLogTime()
+}
 
 // Log yang sedang aktif dipilih (untuk Split Layout)
 const selectedLog = computed(() => {
@@ -281,7 +323,8 @@ const checkForNewLogs = async () => {
   if (!apiResponse.value?.success) return
 
   try {
-    const url = getApiUrl(`/api/user-activity/${nikKaryawan.value}/check-new?last_time=${encodeURIComponent(lastRefreshTime.value)}`)
+    const sessionParam = selectedSessionFilter.value !== 'all' ? `&session_id=${encodeURIComponent(selectedSessionFilter.value)}` : ''
+    const url = getApiUrl(`/api/user-activity/${nikKaryawan.value}/check-new?last_time=${encodeURIComponent(lastRefreshTime.value)}${sessionParam}`)
     const res = await $fetch(url)
     if (res.success) {
       newLogsCount.value = res.new_count
@@ -340,7 +383,20 @@ const resolveImage = (path) => {
 const formatWaktu = (waktuISO) => {
   if (!waktuISO) return '-'
   const date = new Date(waktuISO)
-  return date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  const today = new Date()
+  const isToday = date.toDateString() === today.toDateString()
+  const timeStr = date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  if (isToday) {
+    return timeStr
+  }
+  const dateStr = date.toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })
+  return `${dateStr}, ${timeStr}`
+}
+
+const formatTanggalSesi = (waktuISO) => {
+  if (!waktuISO) return '-'
+  const date = new Date(waktuISO)
+  return date.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
 }
 
 const parseAppList = (appData) => {
@@ -410,11 +466,65 @@ const formatApp = (app) => {
 .btn-back:hover { background: #f8fafc; color: #0f172a; }
 
 .user-profile { display: flex; align-items: center; gap: 24px; margin-bottom: 20px; background: #ffffff; padding: 20px; border-radius: 16px; border: 1px solid #e2e8f0; }
-.avatar-huge { width: 64px; height: 64px; border-radius: 16px; background: #e0e7ff; color: #4f46e5; font-size: 28px; font-weight: bold; display: flex; align-items: center; justify-content: center; }
-.user-profile h1 { margin: 0 0 4px 0; color: #0f172a; font-size: 22px; }
+.avatar-huge { width: 64px; height: 64px; border-radius: 16px; background: #e0e7ff; color: #4f46e5; font-size: 28px; font-weight: bold; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.profile-header-row { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; flex-wrap: wrap; }
+.user-profile h1 { margin: 0; color: #0f172a; font-size: 22px; }
 .subtitle { margin: 0; color: #64748b; font-size: 14px; }
 
-/* Layout Selector Card styling */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-pill.active {
+  background-color: #ecfdf5;
+  color: #059669;
+  border: 1px solid #a7f3d0;
+}
+
+.status-pill.offline {
+  background-color: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+}
+
+.pulse-dot {
+  width: 8px;
+  height: 8px;
+  background-color: #10b981;
+  border-radius: 50%;
+  box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  animation: pulse-ring 1.8s infinite;
+}
+
+.offline-dot {
+  width: 8px;
+  height: 8px;
+  background-color: #94a3b8;
+  border-radius: 50%;
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 6px rgba(16, 185, 129, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+}
+
+/* Layout Selector & Filter Card styling */
 .layout-selector-card {
   background: #ffffff;
   border: 1px solid #e2e8f0;
@@ -423,14 +533,41 @@ const formatApp = (app) => {
   margin-bottom: 28px;
   display: flex;
   align-items: center;
-  gap: 20px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02);
+}
+
+.filter-group, .view-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .selector-label {
   font-size: 14px;
   font-weight: 600;
   color: #475569;
+}
+
+.session-select {
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background-color: #f8fafc;
+  color: #1e293b;
+  font-size: 13px;
+  font-weight: 500;
+  outline: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.session-select:focus {
+  border-color: #3b82f6;
+  background-color: #ffffff;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
 }
 
 .selector-buttons {

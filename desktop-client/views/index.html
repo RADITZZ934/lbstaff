@@ -39,7 +39,15 @@
         const nikInput = document.getElementById('nik');
         const errorMsg = document.getElementById('errorMsg');
 
-        const SERVER_URL = 'https://lbstaff.u-u.my.id';
+        // Pre-fill NIK jika sudah pernah tersimpan sebelumnya
+        window.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const saved = await ipcRenderer.invoke('get-saved-nik');
+                if (saved) {
+                    nikInput.value = saved;
+                }
+            } catch (e) {}
+        });
 
         nikInput.addEventListener('keypress', function (e) {
             if (e.key === 'Enter') { loginBtn.click(); }
@@ -59,32 +67,24 @@
             errorMsg.style.display = 'none';
 
             try {
-                const response = await fetch(`${SERVER_URL}/api/login`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ nik })
-                });
+                const result = await ipcRenderer.invoke('attempt-login', { nik });
 
-                const data = await response.json();
-
-                if (data.success) {
-                    loginBtn.textContent = 'Berhasil! Memulai sistem...';
-                    loginBtn.style.backgroundColor = '#10b981'; 
-                    
-                    // Kirim data ke main.js (TERMASUK NIK UNTUK DISIMPAN KE TXT)
-                    ipcRenderer.send('login-sukses', {
-                        user: data.user,
-                        time_entry_id: data.time_entry_id,
-                        nik: nik // <-- NIK dikirim ke main.js
-                    });
+                if (result.success) {
+                    if (result.offline) {
+                        loginBtn.textContent = 'Mode Offline Aktif! Memulai...';
+                        loginBtn.style.backgroundColor = '#f59e0b'; // Oranye untuk offline
+                    } else {
+                        loginBtn.textContent = 'Berhasil! Memulai sistem...';
+                        loginBtn.style.backgroundColor = '#10b981'; // Hijau untuk online
+                    }
                 } else {
-                    errorMsg.textContent = data.message;
+                    errorMsg.textContent = result.message || 'Login gagal.';
                     errorMsg.style.display = 'block';
                     loginBtn.textContent = 'Masuk & Mulai';
                     loginBtn.disabled = false;
                 }
             } catch (error) {
-                errorMsg.textContent = 'Gagal terhubung ke server.';
+                errorMsg.textContent = 'Terjadi kesalahan sistem: ' + error.message;
                 errorMsg.style.display = 'block';
                 loginBtn.textContent = 'Masuk & Mulai';
                 loginBtn.disabled = false;
