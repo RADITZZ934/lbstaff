@@ -10,6 +10,46 @@ let mainWindow;
 let tray = null;
 let aktivitasAplikasi = {};
 
+// --- MONITORING INPUT GLOBAL (KEYBOARD & MOUSE) ---
+let uIOhook = null;
+let keyboardClicksCount = 0;
+let mouseMovesCount = 0;
+let lastMouseMoveTime = 0;
+
+try {
+    const napi = require('uiohook-napi');
+    uIOhook = napi.uIOhook;
+
+    // Catat setiap kali tombol keyboard ditekan
+    uIOhook.on('keydown', () => {
+        keyboardClicksCount++;
+    });
+
+    // Catat setiap klik mouse
+    uIOhook.on('click', () => {
+        mouseMovesCount++;
+    });
+
+    // Catat setiap scroll roda mouse
+    uIOhook.on('wheel', () => {
+        mouseMovesCount++;
+    });
+
+    // Catat pergerakan kursor mouse (sampling 1 tick per 100ms agar proporsional dan sangat ringan CPU)
+    uIOhook.on('mousemove', () => {
+        const now = Date.now();
+        if (now - lastMouseMoveTime >= 100) {
+            lastMouseMoveTime = now;
+            mouseMovesCount++;
+        }
+    });
+
+    uIOhook.start();
+    console.log('✅ [Input Hook] Global keyboard & mouse listener aktif.');
+} catch (err) {
+    console.warn('⚠️ [Input Hook] Gagal mengaktifkan listener keyboard/mouse:', err.message);
+}
+
 // Variabel dinamis untuk menampung data karyawan dan sesi yang sedang aktif
 let currentUser = null;
 let currentTimeEntryId = null;
@@ -449,6 +489,11 @@ ipcMain.on('login-sukses', (event, data) => {
 
 // Mencegat proses aplikasi keluar (termasuk saat laptop di-shutdown OS)
 app.on('before-quit', async (event) => {
+    if (uIOhook) {
+        try {
+            uIOhook.stop();
+        } catch (e) {}
+    }
     if (currentTimeEntryId && !app.isSessionClosed) {
         event.preventDefault();
         
@@ -524,11 +569,19 @@ async function rekamDanKirim() {
         const appAndUrlsPayload = Object.values(aktivitasAplikasi);
         aktivitasAplikasi = {};
 
+        // Ambil metrik riil keyboard & mouse, lalu reset untuk interval berikutnya
+        const currentKeyboardClicks = keyboardClicksCount;
+        const currentMouseMoves = mouseMovesCount;
+        keyboardClicksCount = 0;
+        mouseMovesCount = 0;
+
+        console.log(`📊 [Metrik Aktivitas] Keyboard: ${currentKeyboardClicks} ketikan | Mouse: ${currentMouseMoves} gerakan/klik`);
+
         const payload = {
             user_id: currentUser.id,
             time_entry_id: currentTimeEntryId,
-            keyboard_clicks: 20,
-            mouse_moves: 15,
+            keyboard_clicks: currentKeyboardClicks,
+            mouse_moves: currentMouseMoves,
             app_and_urls: appAndUrlsPayload,
             screenshot_base64: screenshot_base64,
             recorded_at: new Date().toISOString()

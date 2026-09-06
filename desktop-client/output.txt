@@ -1,0 +1,5 @@
+
+✅ [Input Hook] Global keyboard & mouse listener aktif.
+⚡ [Offline-First] Memulai sesi offline untuk: Karyawan Raditya (NIK: Raditya). Mulai tracking.
+[Auto-Login] Menghubungi server (https://lbstaff.u-u.my.id)...
+✅ [Online-Login Sukses] Terhubung ke server sebagai: Karyawan Raditya (Sesi: 16)
