@@ -3,3 +3,11 @@
 ⚡ [Offline-First] Memulai sesi offline untuk: Karyawan Raditya (NIK: Raditya). Mulai tracking.
 [Auto-Login] Menghubungi server (https://lbstaff.u-u.my.id)...
 ✅ [Online-Login Sukses] Terhubung ke server sebagai: Karyawan Raditya (Sesi: 16)
+Sedang mengambil screenshot layar...
+[13276:0906/093433.040:ERROR:third_party\webrtc\modules\desktop_capture\win\desktop.cc:68] Failed to assign the desktop to the current thread: 170
+[13276:0906/093434.052:ERROR:third_party\webrtc\modules\desktop_capture\win\desktop.cc:68] Failed to assign the desktop to the current thread: 170
+[13276:0906/093435.060:ERROR:third_party\webrtc\modules\desktop_capture\win\desktop.cc:68] Failed to assign the desktop to the current thread: 170
+📊 [Metrik Aktivitas] Keyboard: 0 ketikan | Mouse: 0 gerakan/klik
+Mengirim data ke server...
+✅ Berhasil Terkirim! Log ID: 256
+-----------------------------------------
