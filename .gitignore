@@ -13,8 +13,10 @@ lerna-debug.log*
 # Uploads and user-generated content
 /backend/uploads/
 /backend/upload/
+/backend/updates/
 /uploads/
 /upload/
+/Onestaff-app-version/
 
 # OS metadata
 .DS_Store
