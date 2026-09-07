@@ -2,6 +2,7 @@ const { app, BrowserWindow, desktopCapturer, powerMonitor, Tray, Menu, ipcMain }
 const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
+const { autoUpdater } = require('electron-updater');
 
 // Konfigurasi URL Server Utama
 const SERVER_URL = process.env.SERVER_URL || 'https://lbstaff.u-u.my.id';
@@ -145,13 +146,99 @@ function clearUserCache() {
 // --- UPDATE STATUS DI SYSTEM TRAY ---
 function updateTrayStatus() {
     if (!tray) return;
-    if (!currentUser) {
+    if (updateDownloaded) {
+        tray.setToolTip(`Onestaff (Pembaruan v${downloadedVersion || ''} Siap Dipasang)`);
+    } else if (!currentUser) {
         tray.setToolTip('Onestaff - Belum Login');
     } else if (isOfflineMode) {
         tray.setToolTip(`Onestaff (Mode Offline) - ${currentUser.name}`);
     } else {
         tray.setToolTip(`Onestaff (Online) - ${currentUser.name}`);
     }
+}
+
+function buildTrayContextMenu() {
+    if (!tray) return;
+
+    const template = [];
+
+    if (updateDownloaded) {
+        template.push({
+            label: `🚀 Restart & Pasang Pembaruan (v${downloadedVersion || 'Baru'})`,
+            click: () => {
+                app.isQuiting = true;
+                autoUpdater.quitAndInstall();
+            }
+        });
+        template.push({ type: 'separator' });
+    }
+
+    template.push({
+        label: 'Ganti NIK / Logout',
+        click: async () => {
+            if (retryLoginTimeout) {
+                clearTimeout(retryLoginTimeout);
+                retryLoginTimeout = null;
+            }
+            await hentikanSesi();
+            currentUser = null;
+            currentTimeEntryId = null;
+            isOfflineMode = false;
+
+            // Hapus data tersimpan
+            clearUserCache();
+            updateTrayStatus();
+            mainWindow.show(); // Munculkan form login
+        }
+    });
+
+    const contextMenu = Menu.buildFromTemplate(template);
+    tray.setContextMenu(contextMenu);
+}
+
+// --- KONFIGURASI PEMBARUAN OTOMATIS (ELECTRON-UPDATER) ---
+let updateDownloaded = false;
+let downloadedVersion = null;
+
+autoUpdater.autoDownload = true;
+autoUpdater.autoInstallOnAppQuit = true;
+
+function setupAutoUpdater() {
+    autoUpdater.on('checking-for-update', () => {
+        console.log('🔍 [AutoUpdater] Memeriksa ketersediaan pembaruan...');
+    });
+
+    autoUpdater.on('update-available', (info) => {
+        console.log(`📦 [AutoUpdater] Pembaruan baru terdeteksi: v${info.version}. Mengunduh di latar belakang...`);
+    });
+
+    autoUpdater.on('update-not-available', () => {
+        console.log('✅ [AutoUpdater] Aplikasi Onestaff sudah menggunakan versi terbaru.');
+    });
+
+    autoUpdater.on('error', (err) => {
+        console.warn('⚠️ [AutoUpdater Warning]:', err.message);
+    });
+
+    autoUpdater.on('download-progress', (progressObj) => {
+        console.log(`⏳ [AutoUpdater] Mengunduh pembaruan: ${Math.round(progressObj.percent)}% (${(progressObj.bytesPerSecond / 1024).toFixed(1)} KB/s)`);
+    });
+
+    autoUpdater.on('update-downloaded', (info) => {
+        updateDownloaded = true;
+        downloadedVersion = info.version;
+        console.log(`🎉 [AutoUpdater] Pembaruan Onestaff v${info.version} telah selesai diunduh.`);
+
+        updateTrayStatus();
+        buildTrayContextMenu();
+
+        if (tray && typeof tray.displayBalloon === 'function') {
+            tray.displayBalloon({
+                title: 'Pembaruan Onestaff Siap',
+                content: `Pembaruan Onestaff v${info.version} telah selesai diunduh. Aplikasi akan diperbarui saat di-restart.`
+            });
+        }
+    });
 }
 
 // --- MANAJEMEN ANTREAN OFFLINE (OFFLINE BUFFER QUEUE) ---
@@ -266,28 +353,7 @@ app.whenReady().then(() => {
     // Setup System Tray
     const iconPath = path.join(__dirname, 'icon.png');
     tray = new Tray(iconPath);
-    
-    const contextMenu = Menu.buildFromTemplate([
-        { 
-            label: 'Ganti NIK / Logout', 
-            click: async () => { 
-                if (retryLoginTimeout) {
-                    clearTimeout(retryLoginTimeout);
-                    retryLoginTimeout = null;
-                }
-                await hentikanSesi(); 
-                currentUser = null; 
-                currentTimeEntryId = null;
-                isOfflineMode = false;
-                
-                // Hapus data tersimpan
-                clearUserCache();
-                updateTrayStatus();
-                mainWindow.show(); // Munculkan form login
-            } 
-        }
-    ]);
-    tray.setContextMenu(contextMenu);
+    buildTrayContextMenu();
     app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true, path: app.getPath('exe') });
 
     // --- DETEKSI LAYAR KUNCI & MODE TIDUR WINDOWS ---
@@ -348,6 +414,22 @@ app.whenReady().then(() => {
             flushOfflineQueue();
         }
     }, 60 * 1000);
+
+    // Inisialisasi Pengecekan Auto-Update (electron-updater)
+    setupAutoUpdater();
+    // Pengecekan pertama 10 detik setelah aplikasi siap
+    setTimeout(() => {
+        autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+            console.warn('⚠️ [AutoUpdater Startup Check]:', err.message);
+        });
+    }, 10 * 1000);
+
+    // Jadwalkan pengecekan berkala setiap 2 jam
+    setInterval(() => {
+        autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+            console.warn('⚠️ [AutoUpdater Interval Check]:', err.message);
+        });
+    }, 2 * 60 * 60 * 1000);
 });
 
 // --- FUNGSI LOGIN DARI MAIN.JS (BACKGROUND & OFFLINE RESILIENT) ---

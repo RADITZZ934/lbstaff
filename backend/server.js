@@ -85,6 +85,25 @@ app.use(['/uploads', '/upload'], (req, res, next) => {
     return res.status(404).send('Gambar screenshot tidak ditemukan');
 });
 
+// Konfigurasi folder penyimpanan file auto-update desktop client (latest.yml, Onestaff Setup exe, blockmap)
+let UPDATES_DIR = path.resolve(process.env.UPDATES_DIR || path.join(__dirname, 'updates'));
+try {
+    if (!fs.existsSync(UPDATES_DIR)) {
+        fs.mkdirSync(UPDATES_DIR, { recursive: true });
+    }
+} catch (err) {
+    console.warn(`⚠️ [UPDATES_DIR Warning]: Gagal membuat ${UPDATES_DIR} (${err.message}).`);
+}
+
+// Endpoint static untuk melayani file installer & metadata auto-update Onestaff desktop
+app.use('/updates', express.static(UPDATES_DIR, {
+    setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.yml')) {
+            res.setHeader('Cache-Control', 'no-cache');
+        }
+    }
+}));
+
 // 1. Konfigurasi Koneksi PostgreSQL
 const pool = new Pool({
     user: process.env.DB_USER || 'postgres',
