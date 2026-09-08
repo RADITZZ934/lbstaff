@@ -7,6 +7,11 @@ const { autoUpdater } = require('electron-updater');
 // Konfigurasi URL Server Utama
 const SERVER_URL = process.env.SERVER_URL || 'https://lbstaff.u-u.my.id';
 
+// Pasang header default versi aplikasi pada setiap request axios
+try {
+    axios.defaults.headers.common['X-App-Version'] = app.getVersion();
+} catch (e) {}
+
 let mainWindow;
 let tray = null;
 let aktivitasAplikasi = {};
@@ -446,8 +451,8 @@ async function loginDariLatarBelakang(nik) {
     const cachedUser = loadUserCache();
 
     try {
-        console.log(`[Auto-Login] Menghubungi server (${SERVER_URL})...`);
-        const response = await axios.post(`${SERVER_URL}/api/login`, { nik }, { timeout: 10000 });
+        console.log(`[Auto-Login] Menghubungi server (${SERVER_URL})... (Versi: ${app.getVersion()})`);
+        const response = await axios.post(`${SERVER_URL}/api/login`, { nik, app_version: app.getVersion() }, { timeout: 10000 });
         
         if (response.data && response.data.success) {
             currentUser = response.data.user;
@@ -519,7 +524,7 @@ ipcMain.handle('attempt-login', async (event, { nik }) => {
     }
 
     try {
-        const response = await axios.post(`${SERVER_URL}/api/login`, { nik }, { timeout: 10000 });
+        const response = await axios.post(`${SERVER_URL}/api/login`, { nik, app_version: app.getVersion() }, { timeout: 10000 });
 
         if (response.data && response.data.success) {
             currentUser = response.data.user;
@@ -707,7 +712,8 @@ async function rekamDanKirim() {
             mouse_moves: currentMouseMoves,
             app_and_urls: appAndUrlsPayload,
             screenshot_base64: screenshot_base64,
-            recorded_at: new Date().toISOString()
+            recorded_at: new Date().toISOString(),
+            app_version: app.getVersion()
         };
 
         // Jika sedang mode offline atau sesi offline, langsung simpan ke antrean lokal

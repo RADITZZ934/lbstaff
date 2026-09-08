@@ -78,12 +78,15 @@
                       NIK: {{ emp.nik }} 
                       <span v-if="emp.alias" class="emp-realname">({{ emp.name }})</span>
                     </span>
-                    <span v-if="emp.seconds_since_last_activity <= 60 && emp.end_time === null" class="status online">
-                      <span class="dot animate-pulse"></span>
-                    </span>
-                    <span v-else class="status offline">
-                      <span class="dot"></span>
-                    </span>
+                    <div class="emp-meta-right">
+                      <span class="emp-version-pill" :title="`Versi Onestaff: v${emp.app_version || '1.0.1'}`">v{{ emp.app_version || '1.0.1' }}</span>
+                      <span v-if="emp.seconds_since_last_activity <= 60 && emp.end_time === null" class="status online">
+                        <span class="dot animate-pulse"></span>
+                      </span>
+                      <span v-else class="status offline">
+                        <span class="dot"></span>
+                      </span>
+                    </div>
                   </div>
                 </div>
 
@@ -646,6 +649,28 @@ const confirmDeleteUser = async () => {
   font-size: 11px;
   color: #94a3b8;
   margin-top: 1px;
+}
+
+.emp-meta-right {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.emp-version-pill {
+  font-size: 9.5px;
+  font-weight: 600;
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+  padding: 0 4px;
+  border-radius: 4px;
+}
+
+.employee-item.active .emp-version-pill {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #ffffff;
 }
 
 .emp-realname {

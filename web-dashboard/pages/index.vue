@@ -39,11 +39,14 @@
             <span class="label">Mulai Shift:</span>
             <strong>{{ formatWaktu(user.start_time) }}</strong>
           </div>
-          <div v-if="user.seconds_since_last_activity <= 60" class="status active">
-            <span class="pulse-dot"></span> Sedang Merekam
-          </div>
-          <div v-else class="status offline">
-            <span class="offline-dot"></span> Offline / Terputus
+          <div class="status-wrapper">
+            <span class="card-version-tag" :title="`Versi Onestaff: v${user.app_version || '1.0.1'}`">v{{ user.app_version || '1.0.1' }}</span>
+            <div v-if="user.seconds_since_last_activity <= 60" class="status active">
+              <span class="pulse-dot"></span> Sedang Merekam
+            </div>
+            <div v-else class="status offline">
+              <span class="offline-dot"></span> Offline / Terputus
+            </div>
           </div>
         </div>
       </NuxtLink>
@@ -119,6 +122,9 @@ const formatWaktu = (waktuISO) => {
 .time-info { display: flex; flex-direction: column; gap: 4px; }
 .time-info .label { font-size: 12px; color: #64748b; }
 .time-info strong { font-size: 14px; color: #1e293b; }
+
+.status-wrapper { display: flex; align-items: center; gap: 10px; }
+.card-version-tag { font-size: 11px; font-weight: 700; background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; padding: 2px 7px; border-radius: 6px; }
 
 .status { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
 .status.active { color: #10b981; }

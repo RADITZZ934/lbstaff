@@ -47,6 +47,14 @@
           <p class="subtitle">
             <span v-if="apiResponse.user.alias" class="name-badge-original">Nama Asli: <strong>{{ apiResponse.user.name }}</strong> &bull; </span>
             NIK: {{ apiResponse.user.nik }} &bull; 
+            <span class="device-version-pill" :title="`Versi aplikasi Onestaff yang terpasang di komputer: v${apiResponse.user.app_version || '1.0.1'}`">
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                <line x1="8" y1="21" x2="16" y2="21"></line>
+                <line x1="12" y1="17" x2="12" y2="21"></line>
+              </svg>
+              Onestaff v{{ apiResponse.user.app_version || '1.0.1' }}
+            </span> &bull; 
             Mulai Shift: {{ formatWaktu(apiResponse.user.start_time) }} &bull; 
             Total: {{ apiResponse.logs?.length || 0 }} rekaman
           </p>
@@ -1326,6 +1334,31 @@ const formatApp = (app) => {
 
 .name-badge-original strong {
   color: #0f172a;
+}
+
+.device-version-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background-color: #f1f5f9;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  vertical-align: middle;
+  transition: all 0.15s ease;
+}
+
+.device-version-pill:hover {
+  background-color: #e2e8f0;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.device-version-pill svg {
+  color: #2563eb;
 }
 
 /* Alias Modal Styling */

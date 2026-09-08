@@ -153,6 +153,8 @@ async function initDB() {
             CREATE INDEX IF NOT EXISTS idx_activity_logs_time_entry ON activity_logs(time_entry_id, recorded_at DESC);
 
             ALTER TABLE users ADD COLUMN IF NOT EXISTS alias VARCHAR(255);
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS app_version VARCHAR(50);
+            ALTER TABLE time_entries ADD COLUMN IF NOT EXISTS app_version VARCHAR(50);
         `);
         console.log('✅ [Database Schema] Struktur tabel (users, time_entries, activity_logs) siap digunakan.');
     } catch (error) {
@@ -199,6 +201,7 @@ const upload = multer({ storage: storage });
 // --- API OTENTIKASI (LOGIN DENGAN NIK) ---
 app.all('/api/login', async (req, res) => {
     const nik = req.body?.nik || req.query?.nik;
+    const app_version = req.body?.app_version || req.headers['x-app-version'] || null;
 
     if (!nik) {
         return res.status(400).json({ success: false, message: 'NIK tidak boleh kosong' });
@@ -207,7 +210,7 @@ app.all('/api/login', async (req, res) => {
     try {
         // Cek database hanya berdasarkan NIK
         let userResult = await pool.query(
-            'SELECT id, name, alias, email, role, nik FROM users WHERE nik = $1',
+            'SELECT id, name, alias, app_version, email, role, nik FROM users WHERE nik = $1',
             [nik]
         );
 
@@ -217,27 +220,32 @@ app.all('/api/login', async (req, res) => {
         if (userResult.rows.length === 0) {
             console.log(`[Pendaftaran Otomatis] NIK ${nik} tidak ditemukan. Membuat user baru...`);
             const insertUserQuery = `
-                INSERT INTO users (name, email, role, nik, password_hash)
-                VALUES ($1, $2, $3, $4, $5)
-                RETURNING id, name, alias, email, role, nik;
+                INSERT INTO users (name, email, role, nik, password_hash, app_version)
+                VALUES ($1, $2, $3, $4, $5, $6)
+                RETURNING id, name, alias, email, role, nik, app_version;
             `;
             const newUserResult = await pool.query(insertUserQuery, [
                 `Karyawan ${nik}`,
                 `karyawan_${nik}@lbstaff.local`,
                 'karyawan',
                 nik,
-                'auto-generated'
+                'auto-generated',
+                app_version
             ]);
             user = newUserResult.rows[0];
             console.log(`✅ [User Baru Terdaftar] ID: ${user.id}, Nama: ${user.name}`);
         } else {
             user = userResult.rows[0];
+            if (app_version && user.app_version !== app_version) {
+                await pool.query('UPDATE users SET app_version = $1 WHERE id = $2', [app_version, user.id]);
+                user.app_version = app_version;
+            }
         }
 
-        // Buat Sesi Kerja baru
+        // Buat Sesi Kerja baru (simpan juga versi aplikasi saat sesi ini berjalan)
         const sessionResult = await pool.query(
-            'INSERT INTO time_entries (user_id, start_time) VALUES ($1, NOW()) RETURNING id',
-            [user.id]
+            'INSERT INTO time_entries (user_id, start_time, app_version) VALUES ($1, NOW(), $2) RETURNING id',
+            [user.id, app_version]
         );
 
         res.json({
@@ -337,6 +345,12 @@ app.post('/api/track', (req, res, next) => {
         }
 
         let activeTimeEntryId = time_entry_id ? parseInt(time_entry_id, 10) : null;
+        const detectedVersion = req.body?.app_version || req.headers['x-app-version'] || null;
+
+        if (detectedVersion && user_id) {
+            pool.query('UPDATE users SET app_version = $1 WHERE id = $2', [detectedVersion, user_id]).catch(() => {});
+        }
+
         if (!activeTimeEntryId || isNaN(activeTimeEntryId)) {
             const sessionCheck = await pool.query(
                 'SELECT id FROM time_entries WHERE user_id = $1 AND end_time IS NULL ORDER BY start_time DESC LIMIT 1',
@@ -346,11 +360,13 @@ app.post('/api/track', (req, res, next) => {
                 activeTimeEntryId = sessionCheck.rows[0].id;
             } else {
                 const newSession = await pool.query(
-                    'INSERT INTO time_entries (user_id, start_time) VALUES ($1, NOW()) RETURNING id',
-                    [user_id || 1]
+                    'INSERT INTO time_entries (user_id, start_time, app_version) VALUES ($1, NOW(), $2) RETURNING id',
+                    [user_id || 1, detectedVersion]
                 );
                 activeTimeEntryId = newSession.rows[0].id;
             }
+        } else if (detectedVersion) {
+            pool.query('UPDATE time_entries SET app_version = $1 WHERE id = $2 AND app_version IS NULL', [detectedVersion, activeTimeEntryId]).catch(() => {});
         }
 
         // Insert data ke PostgreSQL (tabel activity_logs)
@@ -397,6 +413,7 @@ app.get('/api/live-monitoring', async (req, res) => {
                 u.name, 
                 u.alias,
                 u.nik, 
+                COALESCE(t.app_version, u.app_version, '1.0.1') as app_version,
                 t.start_time,
                 t.end_time,
                 CASE 
@@ -432,7 +449,9 @@ app.get('/api/user-activity/:nik', async (req, res) => {
     try {
         // 1. Cari data user dan sesi terbarunya
         const userQuery = `
-            SELECT u.id as user_id, u.name, u.alias, u.nik, t.id as time_entry_id, t.start_time, t.end_time
+            SELECT u.id as user_id, u.name, u.alias, u.nik, 
+                   COALESCE(t.app_version, u.app_version, '1.0.1') as app_version,
+                   t.id as time_entry_id, t.start_time, t.end_time
             FROM users u
             LEFT JOIN time_entries t ON u.id = t.user_id
             WHERE u.nik = $1
