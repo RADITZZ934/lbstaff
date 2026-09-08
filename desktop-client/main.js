@@ -430,12 +430,12 @@ app.whenReady().then(() => {
         });
     }, 10 * 1000);
 
-    // Jadwalkan pengecekan berkala setiap 2 jam
+    // Jadwalkan pengecekan berkala setiap 5 menit (percobaan, nanti ubah ke 2 jam untuk produksi)
     setInterval(() => {
         autoUpdater.checkForUpdatesAndNotify().catch((err) => {
             console.warn('⚠️ [AutoUpdater Interval Check]:', err.message);
         });
-    }, 2 * 60 * 60 * 1000);
+    }, 5 * 60 * 1000);
 });
 
 // --- FUNGSI LOGIN DARI MAIN.JS (BACKGROUND & OFFLINE RESILIENT) ---
