@@ -77,7 +77,15 @@ jobs:
           npm run build
 
       - name: Deploy / Reload in PM2
+        timeout-minutes: 5
+        shell: bash
         run: |
-          npx pm2 delete lbstaff-backend lbstaff-frontend || true
-          npx pm2 start ecosystem.config.cjs --update-env
-          npx pm2 save
+          # Gunakan binary global pm2 di server agar versinya cocok dengan daemon in-memory
+          PM2="pm2"
+          if ! command -v pm2 &> /dev/null; then
+            PM2="npx pm2"
+          fi
+          $PM2 delete lbstaff-backend lbstaff-frontend || true
+          $PM2 start ecosystem.config.cjs --update-env
+          # Batasi waktu save maksimal 15 detik agar tidak pernah menggantung CI runner
+          timeout 15 $PM2 save --force || true
