@@ -151,6 +151,8 @@ async function initDB() {
             CREATE INDEX IF NOT EXISTS idx_time_entries_user ON time_entries(user_id);
             CREATE INDEX IF NOT EXISTS idx_time_entries_active ON time_entries(user_id, start_time DESC) WHERE end_time IS NULL;
             CREATE INDEX IF NOT EXISTS idx_activity_logs_time_entry ON activity_logs(time_entry_id, recorded_at DESC);
+
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS alias VARCHAR(255);
         `);
         console.log('✅ [Database Schema] Struktur tabel (users, time_entries, activity_logs) siap digunakan.');
     } catch (error) {
@@ -205,7 +207,7 @@ app.all('/api/login', async (req, res) => {
     try {
         // Cek database hanya berdasarkan NIK
         let userResult = await pool.query(
-            'SELECT id, name, email, role, nik FROM users WHERE nik = $1',
+            'SELECT id, name, alias, email, role, nik FROM users WHERE nik = $1',
             [nik]
         );
 
@@ -217,7 +219,7 @@ app.all('/api/login', async (req, res) => {
             const insertUserQuery = `
                 INSERT INTO users (name, email, role, nik, password_hash)
                 VALUES ($1, $2, $3, $4, $5)
-                RETURNING id, name, email, role, nik;
+                RETURNING id, name, alias, email, role, nik;
             `;
             const newUserResult = await pool.query(insertUserQuery, [
                 `Karyawan ${nik}`,
@@ -391,7 +393,9 @@ app.get('/api/live-monitoring', async (req, res) => {
         // Query untuk mengambil sesi paling baru dari setiap karyawan beserta status aktivitasnya
         const query = `
             SELECT DISTINCT ON (u.nik)
+                u.id,
                 u.name, 
+                u.alias,
                 u.nik, 
                 t.start_time,
                 t.end_time,
@@ -428,7 +432,7 @@ app.get('/api/user-activity/:nik', async (req, res) => {
     try {
         // 1. Cari data user dan sesi terbarunya
         const userQuery = `
-            SELECT u.id as user_id, u.name, u.nik, t.id as time_entry_id, t.start_time, t.end_time
+            SELECT u.id as user_id, u.name, u.alias, u.nik, t.id as time_entry_id, t.start_time, t.end_time
             FROM users u
             LEFT JOIN time_entries t ON u.id = t.user_id
             WHERE u.nik = $1
@@ -549,6 +553,82 @@ app.get('/api/screenshot', (req, res) => {
         return res.sendFile(foundPath);
     }
     return res.status(404).send('Gambar tidak ditemukan');
+});
+
+// --- API UPDATE ALIAS KARYAWAN ---
+app.put('/api/user/:nik/alias', async (req, res) => {
+    const { nik } = req.params;
+    let { alias } = req.body || {};
+
+    if (typeof alias === 'string') {
+        alias = alias.trim();
+        if (alias === '') alias = null;
+    } else {
+        alias = null;
+    }
+
+    try {
+        const updateQuery = `
+            UPDATE users 
+            SET alias = $1 
+            WHERE nik = $2 
+            RETURNING id, name, alias, nik;
+        `;
+        const result = await pool.query(updateQuery, [alias, nik]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Karyawan tidak ditemukan' });
+        }
+
+        res.json({
+            success: true,
+            message: 'Alias karyawan berhasil diperbarui',
+            user: result.rows[0]
+        });
+    } catch (error) {
+        console.error('Error saat memperbarui alias:', error);
+        res.status(500).json({ success: false, message: 'Terjadi kesalahan pada server' });
+    }
+});
+
+// --- API HAPUS USER (CASCADE) ---
+app.delete('/api/user/:nik', async (req, res) => {
+    const { nik } = req.params;
+
+    try {
+        // Cari user terlebih dahulu untuk mendapatkan id-nya
+        const userQuery = await pool.query('SELECT id, name, alias, nik FROM users WHERE nik = $1', [nik]);
+        if (userQuery.rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Karyawan tidak ditemukan' });
+        }
+
+        const userToDelete = userQuery.rows[0];
+
+        // Hapus user dari database (time_entries dan activity_logs otomatis terhapus via CASCADE)
+        await pool.query('DELETE FROM users WHERE id = $1', [userToDelete.id]);
+
+        // Bersihkan folder screenshot karyawan di disk jika ada
+        try {
+            const userUploadsDir = path.join(UPLOADS_DIR, `karyawan_${userToDelete.id}`);
+            if (fs.existsSync(userUploadsDir)) {
+                fs.rmSync(userUploadsDir, { recursive: true, force: true });
+                console.log(`🗑️ [User Cleanup] Folder upload berhasil dihapus: ${userUploadsDir}`);
+            }
+        } catch (cleanupErr) {
+            console.warn(`⚠️ [User Cleanup Warning]: Gagal menghapus folder screenshot karyawan_${userToDelete.id}:`, cleanupErr.message);
+        }
+
+        console.log(`✅ [User Dihapus] User ${userToDelete.name} (NIK: ${userToDelete.nik}) berhasil dihapus.`);
+
+        res.json({
+            success: true,
+            message: `User ${userToDelete.alias || userToDelete.name} (${userToDelete.nik}) berhasil dihapus permanen`,
+            deleted_user: userToDelete
+        });
+    } catch (error) {
+        console.error('Error saat menghapus user:', error);
+        res.status(500).json({ success: false, message: 'Terjadi kesalahan server saat menghapus user' });
+    }
 });
 
 // Jalankan Server

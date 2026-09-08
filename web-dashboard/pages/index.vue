@@ -25,10 +25,13 @@
         style="text-decoration: none; color: inherit;"
       >
         <div class="card-header">
-          <div class="avatar-large">{{ user.name.charAt(0).toUpperCase() }}</div>
+          <div class="avatar-large">{{ (user.alias || user.name).charAt(0).toUpperCase() }}</div>
           <div class="user-info">
-            <h3>{{ user.name }}</h3>
-            <span class="badge">NIK: {{ user.nik }}</span>
+            <div class="user-title-row">
+              <h3>{{ user.alias || user.name }}</h3>
+              <span v-if="user.alias" class="badge-alias">Alias</span>
+            </div>
+            <span class="badge">NIK: {{ user.nik }} <span v-if="user.alias" class="badge-realname">({{ user.name }})</span></span>
           </div>
         </div>
         <div class="card-body">
@@ -106,8 +109,11 @@ const formatWaktu = (waktuISO) => {
 
 .card-header { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
 .avatar-large { width: 48px; height: 48px; border-radius: 12px; background: #e0e7ff; color: #4f46e5; font-size: 20px; font-weight: bold; display: flex; align-items: center; justify-content: center; }
-.user-info h3 { margin: 0 0 4px 0; font-size: 16px; color: #0f172a; }
+.user-info h3 { margin: 0; font-size: 16px; color: #0f172a; }
+.user-title-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.badge-alias { font-size: 9.5px; font-weight: 700; background: #dbeafe; color: #1d4ed8; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.3px; }
 .badge { font-size: 12px; background: #f1f5f9; color: #475569; padding: 4px 8px; border-radius: 6px; font-weight: 500; }
+.badge-realname { color: #94a3b8; font-style: italic; font-weight: 400; }
 
 .card-body { border-top: 1px solid #f1f5f9; padding-top: 16px; display: flex; justify-content: space-between; align-items: center; }
 .time-info { display: flex; flex-direction: column; gap: 4px; }

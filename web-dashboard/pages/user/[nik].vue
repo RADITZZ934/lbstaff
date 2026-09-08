@@ -21,10 +21,22 @@
     <!-- Konten Utama -->
     <div v-else-if="apiResponse?.success">
       <div class="user-profile">
-        <div class="avatar-huge">{{ apiResponse.user.name.charAt(0).toUpperCase() }}</div>
-        <div>
+        <div class="avatar-huge">{{ (apiResponse.user.alias || apiResponse.user.name).charAt(0).toUpperCase() }}</div>
+        <div class="profile-meta-info">
           <div class="profile-header-row">
-            <h1>{{ apiResponse.user.name }}</h1>
+            <h1>{{ apiResponse.user.alias || apiResponse.user.name }}</h1>
+            <button 
+              type="button" 
+              class="btn-edit-alias" 
+              @click="openAliasModal" 
+              title="Atur Alias Karyawan"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+              </svg>
+              <span>{{ apiResponse.user.alias ? 'Ubah Alias' : '+ Beri Alias' }}</span>
+            </button>
             <span v-if="!apiResponse.user.end_time" class="status-pill active">
               <span class="pulse-dot"></span> Sesi Aktif
             </span>
@@ -33,8 +45,9 @@
             </span>
           </div>
           <p class="subtitle">
-            NIK: {{ apiResponse.user.nik }} | 
-            Mulai Shift: {{ formatWaktu(apiResponse.user.start_time) }} | 
+            <span v-if="apiResponse.user.alias" class="name-badge-original">Nama Asli: <strong>{{ apiResponse.user.name }}</strong> &bull; </span>
+            NIK: {{ apiResponse.user.nik }} &bull; 
+            Mulai Shift: {{ formatWaktu(apiResponse.user.start_time) }} &bull; 
             Total: {{ apiResponse.logs?.length || 0 }} rekaman
           </p>
         </div>
@@ -241,6 +254,67 @@
           <img :src="previewImage" alt="Preview Penuh" class="modal-img"/>
         </div>
       </div>
+
+      <!-- Modal Edit Alias Karyawan -->
+      <Transition name="fade">
+        <div v-if="showAliasModal" class="alias-modal-backdrop" @click.self="closeAliasModal">
+          <div class="alias-modal-card">
+            <div class="alias-modal-header">
+              <div class="alias-modal-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+              </div>
+              <div>
+                <h3 class="alias-modal-title">Atur Alias Karyawan</h3>
+                <p class="alias-modal-desc">Beri nama panggilan khusus untuk mempermudah identifikasi di dashboard.</p>
+              </div>
+            </div>
+
+            <div class="alias-form-body">
+              <div class="alias-info-row">
+                <span class="alias-label">Nama Asli:</span>
+                <span class="alias-value">{{ apiResponse.user.name }} (NIK: {{ apiResponse.user.nik }})</span>
+              </div>
+
+              <div class="alias-input-group">
+                <label for="aliasInput" class="alias-input-label">Nama Alias / Panggilan:</label>
+                <input 
+                  id="aliasInput" 
+                  type="text" 
+                  v-model="inputAlias" 
+                  placeholder="Contoh: Budi Backend, CS Senior, dll." 
+                  class="alias-input"
+                  maxlength="50"
+                  @keydown.enter.prevent="saveAlias"
+                />
+                <span class="alias-hint">Kosongkan kolom ini jika ingin menghapus alias dan kembali menggunakan nama asli.</span>
+              </div>
+            </div>
+
+            <div class="alias-modal-actions">
+              <button 
+                type="button" 
+                class="btn-alias-cancel" 
+                @click="closeAliasModal"
+                :disabled="isSavingAlias"
+              >
+                Batal
+              </button>
+              <button 
+                type="button" 
+                class="btn-alias-save" 
+                @click="saveAlias"
+                :disabled="isSavingAlias"
+              >
+                <span v-if="isSavingAlias">Menyimpan...</span>
+                <span v-else>Simpan Alias</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
     </div>
   </div>
 </template>
@@ -270,6 +344,46 @@ const selectedIndex = ref(0)
 // Modal Zoom State (untuk Grid & List Layout)
 const previewImage = ref(null)
 const previewTimestamp = ref('')
+
+// --- ALIAS MODAL LOGIC ---
+const showAliasModal = ref(false)
+const inputAlias = ref('')
+const isSavingAlias = ref(false)
+
+const openAliasModal = () => {
+  inputAlias.value = apiResponse.value?.user?.alias || ''
+  showAliasModal.value = true
+}
+
+const closeAliasModal = () => {
+  if (isSavingAlias.value) return
+  showAliasModal.value = false
+}
+
+const saveAlias = async () => {
+  if (isSavingAlias.value) return
+  isSavingAlias.value = true
+
+  try {
+    const res = await $fetch(getApiUrl(`/api/user/${nikKaryawan.value}/alias`), {
+      method: 'PUT',
+      body: {
+        alias: inputAlias.value.trim() || null
+      }
+    })
+
+    if (apiResponse.value?.user) {
+      apiResponse.value.user.alias = res.user?.alias || null
+    }
+
+    closeAliasModal()
+  } catch (err) {
+    console.error('Gagal menyimpan alias:', err)
+    alert('Gagal menyimpan alias: ' + (err.data?.message || err.message))
+  } finally {
+    isSavingAlias.value = false
+  }
+}
 
 // URL dinamis berdasarkan NIK dan filter sesi yang dipilih
 const apiUrl = computed(() => {
@@ -1179,4 +1293,199 @@ const formatApp = (app) => {
 
 .close-btn:hover { color: #fff; }
 .modal-img { max-width: 85vw; max-height: calc(85vh - 50px); object-fit: contain; display: block; }
+
+/* Styling Alias */
+.profile-meta-info {
+  flex: 1;
+}
+
+.btn-edit-alias {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-edit-alias:hover {
+  background: #e2e8f0;
+  color: #1e293b;
+  border-color: #94a3b8;
+}
+
+.name-badge-original {
+  color: #475569;
+}
+
+.name-badge-original strong {
+  color: #0f172a;
+}
+
+/* Alias Modal Styling */
+.alias-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+  padding: 20px;
+}
+
+.alias-modal-card {
+  background: #ffffff;
+  border-radius: 16px;
+  max-width: 440px;
+  width: 100%;
+  padding: 24px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  border: 1px solid #e2e8f0;
+}
+
+.alias-modal-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.alias-modal-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background-color: #eff6ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.alias-modal-title {
+  margin: 0 0 4px 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.alias-modal-desc {
+  margin: 0;
+  font-size: 12.5px;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.alias-form-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.alias-info-row {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 14px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+}
+
+.alias-label {
+  color: #64748b;
+}
+
+.alias-value {
+  color: #1e293b;
+  font-weight: 600;
+}
+
+.alias-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.alias-input-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.alias-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #1e293b;
+  outline: none;
+  background: #ffffff;
+  transition: all 0.2s ease;
+}
+
+.alias-input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.alias-hint {
+  font-size: 11.5px;
+  color: #94a3b8;
+}
+
+.alias-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.btn-alias-cancel {
+  padding: 9px 16px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-alias-cancel:hover:not(:disabled) {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.btn-alias-save {
+  padding: 9px 18px;
+  border-radius: 8px;
+  border: none;
+  background: #2563eb;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-alias-save:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.btn-alias-save:disabled,
+.btn-alias-cancel:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
 </style>
