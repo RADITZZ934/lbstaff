@@ -96,7 +96,7 @@ try {
 }
 
 // Endpoint static untuk melayani file installer & metadata auto-update Onestaff desktop
-app.use('/updates', express.static(UPDATES_DIR, {
+app.use(['/updates', '/api/updates'], express.static(UPDATES_DIR, {
     setHeaders: (res, filePath) => {
         if (filePath.endsWith('.yml')) {
             res.setHeader('Cache-Control', 'no-cache');
