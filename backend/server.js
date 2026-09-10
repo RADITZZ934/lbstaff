@@ -95,6 +95,40 @@ try {
     console.warn(`⚠️ [UPDATES_DIR Warning]: Gagal membuat ${UPDATES_DIR} (${err.message}).`);
 }
 
+// Endpoint dinamis untuk latest.yml auto-updater via Bram Innovation Asset Repository
+app.get(['/updates/latest.yml', '/api/updates/latest.yml'], async (req, res) => {
+    try {
+        const fileId = process.env.UPDATE_FILE_ID || 'file-3447a60cc0ee408ba7e70b0fad1210c8';
+        const response = await fetch(`https://braminnovation.com/api/checkupdate/file/${fileId}`);
+        if (!response.ok) {
+            throw new Error(`Gagal mengambil metadata dari braminnovation (status ${response.status})`);
+        }
+        const data = await response.json();
+        
+        let downloadUrl = (data.link || `https://braminnovation.com/api/files/download/${fileId}`).replace(/^http:\/\//, 'https://');
+        const version = data.versi || '1.0.2';
+        
+        const ymlContent = `version: ${version}
+files:
+  - url: ${downloadUrl}
+path: ${downloadUrl}
+releaseDate: '${data.update_date || new Date().toISOString()}'
+`;
+        res.setHeader('Content-Type', 'text/yaml');
+        res.setHeader('Cache-Control', 'no-cache');
+        return res.send(ymlContent);
+    } catch (err) {
+        console.error('⚠️ [AutoUpdater YML Error]:', err.message);
+        const localYml = path.join(UPDATES_DIR, 'latest.yml');
+        if (fs.existsSync(localYml)) {
+            res.setHeader('Content-Type', 'text/yaml');
+            res.setHeader('Cache-Control', 'no-cache');
+            return res.sendFile(localYml);
+        }
+        return res.status(404).send('Update metadata tidak ditemukan');
+    }
+});
+
 // Endpoint static untuk melayani file installer & metadata auto-update Onestaff desktop
 app.use(['/updates', '/api/updates'], express.static(UPDATES_DIR, {
     setHeaders: (res, filePath) => {
