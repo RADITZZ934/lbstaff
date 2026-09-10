@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'backend/**'
+      - 'desktop-client/**'
       - 'web-dashboard/**'
       - 'ecosystem.config.cjs'
       - '.github/workflows/deploy.yml'
@@ -17,8 +18,24 @@ jobs:
     runs-on: self-hosted
 
     steps:
+      - name: Backup Existing Updates Binaries
+        shell: bash
+        run: |
+          mkdir -p /tmp/lbstaff_updates_backup
+          if [ -d "backend/updates" ]; then
+            cp -rf backend/updates/* /tmp/lbstaff_updates_backup/ 2>/dev/null || true
+          fi
+
       - name: Checkout Code
         uses: actions/checkout@v4
+
+      - name: Restore Updates Binaries
+        shell: bash
+        run: |
+          mkdir -p backend/updates
+          if [ -d "/tmp/lbstaff_updates_backup" ]; then
+            cp -rf /tmp/lbstaff_updates_backup/* backend/updates/ 2>/dev/null || true
+          fi
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

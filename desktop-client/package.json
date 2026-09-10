@@ -28,6 +28,7 @@
   "build": {
     "appId": "com.onestaff.app",
     "productName": "Onestaff",
+    "compression": "maximum",
     "npmRebuild": false,
     "directories": {
       "output": "dist"
