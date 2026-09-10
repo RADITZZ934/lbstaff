@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev:backend": "pnpm --filter backend start",
+    "dev:backend": "powershell -Command \"cd backend; go run cmd/server/main.go\"",
+    "build:backend": "powershell -Command \"cd backend; go build -o lbstaff-backend.exe ./cmd/server\"",
+    "dev:backend-legacy": "powershell -Command \"cd backend-legacy; node server.js\"",
     "dev:dashboard": "pnpm --filter web-dashboard dev",
     "dev:desktop": "pnpm --filter desktop-client start",
     "build:desktop": "npm --prefix desktop-client run build:exe"

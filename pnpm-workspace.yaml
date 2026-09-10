@@ -1,5 +1,4 @@
 packages:
-  - 'backend'
   - 'desktop-client'
   - 'web-dashboard'
 

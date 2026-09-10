@@ -74,10 +74,17 @@ jobs:
             echo "Generated default web-dashboard/.env"
           fi
 
-      - name: Install Backend Dependencies
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          check-latest: false
+
+      - name: Build Golang Backend
         run: |
           cd backend
-          npm install
+          go build -o lbstaff-backend ./cmd/server
+          chmod +x lbstaff-backend || true
 
       - name: Install Frontend Dependencies & Build Nuxt
         env:
