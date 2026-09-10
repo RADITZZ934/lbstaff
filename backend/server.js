@@ -358,6 +358,9 @@ app.post('/api/track', (req, res, next) => {
             );
             if (sessionCheck.rows.length > 0) {
                 activeTimeEntryId = sessionCheck.rows[0].id;
+                if (detectedVersion) {
+                    pool.query('UPDATE time_entries SET app_version = $1 WHERE id = $2', [detectedVersion, activeTimeEntryId]).catch(() => {});
+                }
             } else {
                 const newSession = await pool.query(
                     'INSERT INTO time_entries (user_id, start_time, app_version) VALUES ($1, NOW(), $2) RETURNING id',
@@ -366,7 +369,7 @@ app.post('/api/track', (req, res, next) => {
                 activeTimeEntryId = newSession.rows[0].id;
             }
         } else if (detectedVersion) {
-            pool.query('UPDATE time_entries SET app_version = $1 WHERE id = $2 AND app_version IS NULL', [detectedVersion, activeTimeEntryId]).catch(() => {});
+            pool.query('UPDATE time_entries SET app_version = $1 WHERE id = $2', [detectedVersion, activeTimeEntryId]).catch(() => {});
         }
 
         // Insert data ke PostgreSQL (tabel activity_logs)
@@ -413,7 +416,7 @@ app.get('/api/live-monitoring', async (req, res) => {
                 u.name, 
                 u.alias,
                 u.nik, 
-                COALESCE(t.app_version, u.app_version, '1.0.1') as app_version,
+                COALESCE(u.app_version, t.app_version, '1.0.1') as app_version,
                 t.start_time,
                 t.end_time,
                 CASE 
@@ -450,7 +453,7 @@ app.get('/api/user-activity/:nik', async (req, res) => {
         // 1. Cari data user dan sesi terbarunya
         const userQuery = `
             SELECT u.id as user_id, u.name, u.alias, u.nik, 
-                   COALESCE(t.app_version, u.app_version, '1.0.1') as app_version,
+                   COALESCE(u.app_version, t.app_version, '1.0.1') as app_version,
                    t.id as time_entry_id, t.start_time, t.end_time
             FROM users u
             LEFT JOIN time_entries t ON u.id = t.user_id

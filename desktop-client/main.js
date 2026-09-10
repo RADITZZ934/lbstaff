@@ -232,17 +232,24 @@ function setupAutoUpdater() {
     autoUpdater.on('update-downloaded', (info) => {
         updateDownloaded = true;
         downloadedVersion = info.version;
-        console.log(`🎉 [AutoUpdater] Pembaruan Onestaff v${info.version} telah selesai diunduh.`);
+        console.log(`🎉 [AutoUpdater] Pembaruan Onestaff v${info.version} telah selesai diunduh. Memasang otomatis dalam 5 detik...`);
 
         updateTrayStatus();
         buildTrayContextMenu();
 
         if (tray && typeof tray.displayBalloon === 'function') {
             tray.displayBalloon({
-                title: 'Pembaruan Onestaff Siap',
-                content: `Pembaruan Onestaff v${info.version} telah selesai diunduh. Aplikasi akan diperbarui saat di-restart.`
+                title: 'Pembaruan Otomatis Onestaff',
+                content: `Pembaruan v${info.version} siap dipasang. Aplikasi akan merestart otomatis dalam beberapa detik.`
             });
         }
+
+        // Pemasangan & Restart Otomatis secara Silent (Tanpa perlu klik manual dari karyawan)
+        setTimeout(() => {
+            console.log('🔄 [AutoUpdater] Mengesekusi quitAndInstall otomatis (Silent)...');
+            app.isQuiting = true;
+            autoUpdater.quitAndInstall(true, true);
+        }, 5000);
     });
 }
 
