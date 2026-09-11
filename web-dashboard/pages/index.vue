@@ -38,6 +38,9 @@
           <div class="time-info">
             <span class="label">Mulai Shift:</span>
             <strong>{{ formatWaktu(user.start_time) }}</strong>
+            <span v-if="user.location_name || user.ip_address" class="location-badge" :title="`IP: ${user.ip_address || '-'} | Coords: ${user.latitude || '-'}, ${user.longitude || '-'}`">
+              📍 {{ user.location_name || user.ip_address }}
+            </span>
           </div>
           <div class="status-wrapper">
             <span class="card-version-tag" :title="`Versi Onestaff: v${user.app_version || '1.0.1'}`">v{{ user.app_version || '1.0.1' }}</span>
@@ -122,6 +125,7 @@ const formatWaktu = (waktuISO) => {
 .time-info { display: flex; flex-direction: column; gap: 4px; }
 .time-info .label { font-size: 12px; color: #64748b; }
 .time-info strong { font-size: 14px; color: #1e293b; }
+.location-badge { font-size: 11px; color: #0284c7; background: #e0f2fe; padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 2px; font-weight: 500; margin-top: 2px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .status-wrapper { display: flex; align-items: center; gap: 10px; }
 .card-version-tag { font-size: 11px; font-weight: 700; background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; padding: 2px 7px; border-radius: 6px; }

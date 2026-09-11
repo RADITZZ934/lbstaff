@@ -35,7 +35,7 @@ func (h *MonitoringHandler) LiveMonitoring(c *gin.Context) {
 			u.name, 
 			u.alias,
 			u.nik, 
-			COALESCE(u.app_version, t.app_version, '1.0.1') as app_version,
+			COALESCE(u.app_version, t.app_version, '1.0.3') as app_version,
 			t.start_time,
 			t.end_time,
 			CASE 
@@ -45,7 +45,11 @@ func (h *MonitoringHandler) LiveMonitoring(c *gin.Context) {
 					t.start_time,
 					NOW()
 				)))::INTEGER
-			END as seconds_since_last_activity
+			END as seconds_since_last_activity,
+			COALESCE((SELECT location_name FROM activity_logs WHERE user_id = u.id AND location_name IS NOT NULL ORDER BY recorded_at DESC LIMIT 1), t.location_name) as location_name,
+			COALESCE((SELECT latitude FROM activity_logs WHERE user_id = u.id AND latitude IS NOT NULL ORDER BY recorded_at DESC LIMIT 1), t.latitude) as latitude,
+			COALESCE((SELECT longitude FROM activity_logs WHERE user_id = u.id AND longitude IS NOT NULL ORDER BY recorded_at DESC LIMIT 1), t.longitude) as longitude,
+			COALESCE((SELECT ip_address FROM activity_logs WHERE user_id = u.id AND ip_address IS NOT NULL ORDER BY recorded_at DESC LIMIT 1), t.ip_address) as ip_address
 		FROM users u
 		LEFT JOIN time_entries t ON u.id = t.user_id
 		ORDER BY u.nik, t.start_time DESC NULLS LAST;
@@ -65,10 +69,15 @@ func (h *MonitoringHandler) LiveMonitoring(c *gin.Context) {
 		var alias sql.NullString
 		var startTime sql.NullTime
 		var endTime sql.NullTime
+		var locName sql.NullString
+		var lat sql.NullFloat64
+		var lng sql.NullFloat64
+		var ip sql.NullString
 
 		err := rows.Scan(
 			&u.ID, &u.Name, &alias, &u.NIK, &u.AppVersion,
 			&startTime, &endTime, &u.SecondsSinceLastActivity,
+			&locName, &lat, &lng, &ip,
 		)
 		if err != nil {
 			log.Printf("⚠️ Error scan row live monitoring: %v", err)
@@ -83,6 +92,18 @@ func (h *MonitoringHandler) LiveMonitoring(c *gin.Context) {
 		}
 		if endTime.Valid {
 			u.EndTime = &endTime.Time
+		}
+		if locName.Valid {
+			u.LocationName = &locName.String
+		}
+		if lat.Valid {
+			u.Latitude = &lat.Float64
+		}
+		if lng.Valid {
+			u.Longitude = &lng.Float64
+		}
+		if ip.Valid {
+			u.IPAddress = &ip.String
 		}
 
 		users = append(users, u)
@@ -111,8 +132,12 @@ func (h *MonitoringHandler) UserActivity(c *gin.Context) {
 	// 1. Cari data user dan sesi terbarunya
 	userQuery := `
 		SELECT u.id as user_id, u.name, u.alias, u.nik, 
-		       COALESCE(u.app_version, t.app_version, '1.0.1') as app_version,
-		       t.id as time_entry_id, t.start_time, t.end_time
+		       COALESCE(u.app_version, t.app_version, '1.0.3') as app_version,
+		       t.id as time_entry_id, t.start_time, t.end_time,
+		       COALESCE((SELECT location_name FROM activity_logs WHERE user_id = u.id AND location_name IS NOT NULL ORDER BY recorded_at DESC LIMIT 1), t.location_name) as location_name,
+		       COALESCE((SELECT latitude FROM activity_logs WHERE user_id = u.id AND latitude IS NOT NULL ORDER BY recorded_at DESC LIMIT 1), t.latitude) as latitude,
+		       COALESCE((SELECT longitude FROM activity_logs WHERE user_id = u.id AND longitude IS NOT NULL ORDER BY recorded_at DESC LIMIT 1), t.longitude) as longitude,
+		       COALESCE((SELECT ip_address FROM activity_logs WHERE user_id = u.id AND ip_address IS NOT NULL ORDER BY recorded_at DESC LIMIT 1), t.ip_address) as ip_address
 		FROM users u
 		LEFT JOIN time_entries t ON u.id = t.user_id
 		WHERE u.nik = $1
@@ -126,10 +151,15 @@ func (h *MonitoringHandler) UserActivity(c *gin.Context) {
 	var activeTimeEntryID sql.NullInt32
 	var startTime sql.NullTime
 	var endTime sql.NullTime
+	var uLocName sql.NullString
+	var uLat sql.NullFloat64
+	var uLng sql.NullFloat64
+	var uIP sql.NullString
 
 	err = h.DB.QueryRow(ctx, userQuery, nik).Scan(
 		&user.UserID, &user.Name, &alias, &user.NIK, &appVer,
 		&activeTimeEntryID, &startTime, &endTime,
+		&uLocName, &uLat, &uLng, &uIP,
 	)
 	user.ID = user.UserID
 
@@ -160,10 +190,22 @@ func (h *MonitoringHandler) UserActivity(c *gin.Context) {
 	if endTime.Valid {
 		user.EndTime = &endTime.Time
 	}
+	if uLocName.Valid {
+		user.LocationName = &uLocName.String
+	}
+	if uLat.Valid {
+		user.Latitude = &uLat.Float64
+	}
+	if uLng.Valid {
+		user.Longitude = &uLng.Float64
+	}
+	if uIP.Valid {
+		user.IPAddress = &uIP.String
+	}
 
 	// 2. Ambil riwayat sesi-sesi kerja
 	sessionsQuery := `
-		SELECT id, start_time, end_time, total_duration_seconds
+		SELECT id, start_time, end_time, total_duration_seconds, location_name, latitude, longitude, ip_address
 		FROM time_entries
 		WHERE user_id = $1
 		ORDER BY start_time DESC
@@ -178,13 +220,29 @@ func (h *MonitoringHandler) UserActivity(c *gin.Context) {
 			var s models.TimeEntry
 			var sEnd sql.NullTime
 			var sDur sql.NullInt32
-			if scanErr := sessionRows.Scan(&s.ID, &s.StartTime, &sEnd, &sDur); scanErr == nil {
+			var sLoc sql.NullString
+			var sLat sql.NullFloat64
+			var sLng sql.NullFloat64
+			var sIP sql.NullString
+			if scanErr := sessionRows.Scan(&s.ID, &s.StartTime, &sEnd, &sDur, &sLoc, &sLat, &sLng, &sIP); scanErr == nil {
 				if sEnd.Valid {
 					s.EndTime = &sEnd.Time
 				}
 				if sDur.Valid {
 					dur := int(sDur.Int32)
 					s.TotalDurationSeconds = &dur
+				}
+				if sLoc.Valid {
+					s.LocationName = &sLoc.String
+				}
+				if sLat.Valid {
+					s.Latitude = &sLat.Float64
+				}
+				if sLng.Valid {
+					s.Longitude = &sLng.Float64
+				}
+				if sIP.Valid {
+					s.IPAddress = &sIP.String
 				}
 				sessions = append(sessions, s)
 			}
@@ -204,7 +262,7 @@ func (h *MonitoringHandler) UserActivity(c *gin.Context) {
 		}
 
 		logsQuery = `
-			SELECT id, time_entry_id, screenshot_url, app_and_urls, recorded_at, keyboard_clicks, mouse_moves
+			SELECT id, time_entry_id, screenshot_url, app_and_urls, recorded_at, keyboard_clicks, mouse_moves, location_name, latitude, longitude, ip_address
 			FROM activity_logs
 			WHERE user_id = $1 AND time_entry_id = $2
 			ORDER BY recorded_at DESC
@@ -213,7 +271,7 @@ func (h *MonitoringHandler) UserActivity(c *gin.Context) {
 		queryArgs = []interface{}{user.ID, targetSessionID, limit}
 	} else {
 		logsQuery = `
-			SELECT id, time_entry_id, screenshot_url, app_and_urls, recorded_at, keyboard_clicks, mouse_moves
+			SELECT id, time_entry_id, screenshot_url, app_and_urls, recorded_at, keyboard_clicks, mouse_moves, location_name, latitude, longitude, ip_address
 			FROM activity_logs
 			WHERE user_id = $1
 			ORDER BY recorded_at DESC
@@ -230,13 +288,29 @@ func (h *MonitoringHandler) UserActivity(c *gin.Context) {
 			var l models.ActivityLog
 			var scURL sql.NullString
 			var rawApps []byte
+			var lLoc sql.NullString
+			var lLat sql.NullFloat64
+			var lLng sql.NullFloat64
+			var lIP sql.NullString
 
 			if scanErr := logRows.Scan(
-				&l.ID, &l.TimeEntryID, &scURL, &rawApps, &l.RecordedAt, &l.KeyboardClicks, &l.MouseMoves,
+				&l.ID, &l.TimeEntryID, &scURL, &rawApps, &l.RecordedAt, &l.KeyboardClicks, &l.MouseMoves, &lLoc, &lLat, &lLng, &lIP,
 			); scanErr == nil {
 				if scURL.Valid {
 					l.ScreenshotURL = &scURL.String
 					l.ScreenshotPath = &scURL.String
+				}
+				if lLoc.Valid {
+					l.LocationName = &lLoc.String
+				}
+				if lLat.Valid {
+					l.Latitude = &lLat.Float64
+				}
+				if lLng.Valid {
+					l.Longitude = &lLng.Float64
+				}
+				if lIP.Valid {
+					l.IPAddress = &lIP.String
 				}
 				l.CreatedAt = l.RecordedAt
 				if len(rawApps) > 0 {

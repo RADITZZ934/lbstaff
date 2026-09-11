@@ -40,6 +40,10 @@ type TrackJSONPayload struct {
 	ScreenshotBase64 string      `json:"screenshot_base64"`
 	RecordedAt       string      `json:"recorded_at"`
 	AppVersion       string      `json:"app_version"`
+	LocationName     string      `json:"location_name"`
+	Latitude         *float64    `json:"latitude"`
+	Longitude        *float64    `json:"longitude"`
+	IPAddress        string      `json:"ip_address"`
 }
 
 // Track menangani POST /api/track
@@ -52,6 +56,10 @@ func (h *TrackHandler) Track(c *gin.Context) {
 	var screenshotBase64 string
 	var recordedAtStr string
 	var detectedVersion string
+	var locationNameStr string
+	var latitudeVal *float64
+	var longitudeVal *float64
+	var ipAddressStr string
 
 	contentType := c.ContentType()
 	if strings.Contains(contentType, "application/json") {
@@ -65,6 +73,10 @@ func (h *TrackHandler) Track(c *gin.Context) {
 			screenshotBase64 = jsonPayload.ScreenshotBase64
 			recordedAtStr = jsonPayload.RecordedAt
 			detectedVersion = jsonPayload.AppVersion
+			locationNameStr = jsonPayload.LocationName
+			latitudeVal = jsonPayload.Latitude
+			longitudeVal = jsonPayload.Longitude
+			ipAddressStr = jsonPayload.IPAddress
 
 			// Parse time_entry_id (bisa int atau string dari offline queue)
 			switch v := jsonPayload.TimeEntryID.(type) {
@@ -93,6 +105,17 @@ func (h *TrackHandler) Track(c *gin.Context) {
 		screenshotBase64 = c.PostForm("screenshot_base64")
 		recordedAtStr = c.PostForm("recorded_at")
 		detectedVersion = c.PostForm("app_version")
+		locationNameStr = c.PostForm("location_name")
+		ipAddressStr = c.PostForm("ip_address")
+		latStr := c.PostForm("latitude")
+		lngStr := c.PostForm("longitude")
+
+		if lat, err := strconv.ParseFloat(latStr, 64); err == nil {
+			latitudeVal = &lat
+		}
+		if lng, err := strconv.ParseFloat(lngStr, 64); err == nil {
+			longitudeVal = &lng
+		}
 
 		if v, err := strconv.Atoi(userIDStr); err == nil && v > 0 {
 			userID = v
@@ -106,6 +129,10 @@ func (h *TrackHandler) Track(c *gin.Context) {
 		if v, err := strconv.Atoi(mouseMovesStr); err == nil {
 			mouseMoves = v
 		}
+	}
+
+	if ipAddressStr == "" {
+		ipAddressStr = c.ClientIP()
 	}
 
 	if detectedVersion == "" {
@@ -173,6 +200,15 @@ func (h *TrackHandler) Track(c *gin.Context) {
 		_, _ = h.DB.Exec(ctx, "UPDATE users SET app_version = $1 WHERE id = $2", detectedVersion, userID)
 	}
 
+	var locationNamePtr *string
+	if locationNameStr != "" {
+		locationNamePtr = &locationNameStr
+	}
+	var ipAddressPtr *string
+	if ipAddressStr != "" {
+		ipAddressPtr = &ipAddressStr
+	}
+
 	// Verifikasi / Temukan Sesi Aktif
 	activeTimeEntryID := timeEntryID
 	if activeTimeEntryID == 0 {
@@ -184,9 +220,9 @@ func (h *TrackHandler) Track(c *gin.Context) {
 
 		if err == nil && foundID > 0 {
 			activeTimeEntryID = foundID
-			if detectedVersion != "" {
-				_, _ = h.DB.Exec(ctx, "UPDATE time_entries SET app_version = $1 WHERE id = $2", detectedVersion, activeTimeEntryID)
-			}
+			_, _ = h.DB.Exec(ctx,
+				"UPDATE time_entries SET app_version = COALESCE(NULLIF($1, ''), app_version), location_name = COALESCE($2, location_name), latitude = COALESCE($3, latitude), longitude = COALESCE($4, longitude), ip_address = COALESCE($5, ip_address) WHERE id = $6",
+				detectedVersion, locationNamePtr, latitudeVal, longitudeVal, ipAddressPtr, activeTimeEntryID)
 		} else {
 			// Buat sesi baru
 			var newID int
@@ -195,28 +231,30 @@ func (h *TrackHandler) Track(c *gin.Context) {
 				appVer = &detectedVersion
 			}
 			insErr := h.DB.QueryRow(ctx,
-				"INSERT INTO time_entries (user_id, start_time, app_version) VALUES ($1, NOW(), $2) RETURNING id",
-				userID, appVer,
+				"INSERT INTO time_entries (user_id, start_time, app_version, location_name, latitude, longitude, ip_address) VALUES ($1, NOW(), $2, $3, $4, $5, $6) RETURNING id",
+				userID, appVer, locationNamePtr, latitudeVal, longitudeVal, ipAddressPtr,
 			).Scan(&newID)
 			if insErr == nil {
 				activeTimeEntryID = newID
 			}
 		}
-	} else if detectedVersion != "" {
-		_, _ = h.DB.Exec(ctx, "UPDATE time_entries SET app_version = $1 WHERE id = $2", detectedVersion, activeTimeEntryID)
+	} else {
+		_, _ = h.DB.Exec(ctx,
+			"UPDATE time_entries SET app_version = COALESCE(NULLIF($1, ''), app_version), location_name = COALESCE($2, location_name), latitude = COALESCE($3, latitude), longitude = COALESCE($4, longitude), ip_address = COALESCE($5, ip_address) WHERE id = $6",
+			detectedVersion, locationNamePtr, latitudeVal, longitudeVal, ipAddressPtr, activeTimeEntryID)
 	}
 
 	// Insert ke activity_logs
 	insertQuery := `
 		INSERT INTO activity_logs 
-		(user_id, time_entry_id, recorded_at, screenshot_url, keyboard_clicks, mouse_moves, app_and_urls) 
-		VALUES ($1, $2, $3, $4, $5, $6, $7) 
+		(user_id, time_entry_id, recorded_at, screenshot_url, keyboard_clicks, mouse_moves, app_and_urls, location_name, latitude, longitude, ip_address) 
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) 
 		RETURNING id;
 	`
 
 	var logID int
 	err = h.DB.QueryRow(ctx, insertQuery,
-		userID, activeTimeEntryID, logTimestamp, screenshotURL, keyboardClicks, mouseMoves, parsedApps,
+		userID, activeTimeEntryID, logTimestamp, screenshotURL, keyboardClicks, mouseMoves, parsedApps, locationNamePtr, latitudeVal, longitudeVal, ipAddressPtr,
 	).Scan(&logID)
 
 	if err != nil {

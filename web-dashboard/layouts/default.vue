@@ -7,6 +7,7 @@
       </div>
       <nav class="menu">
         <NuxtLink to="/" class="menu-item">Live Monitoring</NuxtLink>
+        <NuxtLink to="/location" class="menu-item">📍 Peta Lokasi</NuxtLink>
       </nav>
 
       <!-- Employee List Section inside Sidebar -->

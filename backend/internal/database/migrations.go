@@ -48,6 +48,14 @@ func RunMigrations(ctx context.Context, pool *pgxpool.Pool) error {
 		ALTER TABLE users ADD COLUMN IF NOT EXISTS alias VARCHAR(255);
 		ALTER TABLE users ADD COLUMN IF NOT EXISTS app_version VARCHAR(50);
 		ALTER TABLE time_entries ADD COLUMN IF NOT EXISTS app_version VARCHAR(50);
+		ALTER TABLE time_entries ADD COLUMN IF NOT EXISTS location_name VARCHAR(255);
+		ALTER TABLE time_entries ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION;
+		ALTER TABLE time_entries ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;
+		ALTER TABLE time_entries ADD COLUMN IF NOT EXISTS ip_address VARCHAR(100);
+		ALTER TABLE activity_logs ADD COLUMN IF NOT EXISTS location_name VARCHAR(255);
+		ALTER TABLE activity_logs ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION;
+		ALTER TABLE activity_logs ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;
+		ALTER TABLE activity_logs ADD COLUMN IF NOT EXISTS ip_address VARCHAR(100);
 	`
 
 	_, err := pool.Exec(ctx, migrationSQL)

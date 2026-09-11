@@ -648,6 +648,42 @@ async function pantauJendelaAktif() {
     }
 }
 
+// --- HELPER GEOLOKASI (IP-BASED GEOLOCATION) ---
+let cachedLocation = null;
+let lastLocationFetchTime = 0;
+const LOCATION_CACHE_TTL_MS = 15 * 60 * 1000; // Cache lokasi 15 menit
+
+async function getLocationInfo() {
+    const now = Date.now();
+    if (cachedLocation && (now - lastLocationFetchTime < LOCATION_CACHE_TTL_MS)) {
+        return cachedLocation;
+    }
+
+    try {
+        const res = await axios.get('http://ip-api.com/json/', { timeout: 4000 });
+        if (res.data && res.data.status === 'success') {
+            const city = res.data.city || '';
+            const regionName = res.data.regionName || res.data.region || '';
+            const country = res.data.country || '';
+            const location_name = [city, regionName, country].filter(Boolean).join(', ');
+
+            cachedLocation = {
+                location_name: location_name || `${res.data.query}`,
+                latitude: res.data.lat || null,
+                longitude: res.data.lon || null,
+                ip_address: res.data.query || null
+            };
+            lastLocationFetchTime = now;
+            console.log(`📍 [Location] Lokasi terdeteksi: ${cachedLocation.location_name} (${cachedLocation.latitude}, ${cachedLocation.longitude})`);
+            return cachedLocation;
+        }
+    } catch (err) {
+        console.warn(`⚠️ [Location] Gagal mengambil geolokasi IP: ${err.message}`);
+    }
+
+    return cachedLocation || { location_name: null, latitude: null, longitude: null, ip_address: null };
+}
+
 // Fungsi inti untuk mengambil screenshot dan mengirim payload
 async function rekamDanKirim() {
     if (!currentUser) return;
@@ -712,6 +748,8 @@ async function rekamDanKirim() {
 
         console.log(`📊 [Metrik Aktivitas] Keyboard: ${currentKeyboardClicks} ketikan | Mouse: ${currentMouseMoves} gerakan/klik`);
 
+        const locationInfo = await getLocationInfo();
+
         const payload = {
             user_id: currentUser.id,
             time_entry_id: currentTimeEntryId,
@@ -720,7 +758,11 @@ async function rekamDanKirim() {
             app_and_urls: appAndUrlsPayload,
             screenshot_base64: screenshot_base64,
             recorded_at: new Date().toISOString(),
-            app_version: app.getVersion()
+            app_version: app.getVersion(),
+            location_name: locationInfo.location_name,
+            latitude: locationInfo.latitude,
+            longitude: locationInfo.longitude,
+            ip_address: locationInfo.ip_address
         };
 
         // Jika sedang mode offline atau sesi offline, langsung simpan ke antrean lokal

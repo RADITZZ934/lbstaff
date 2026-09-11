@@ -55,6 +55,9 @@
               </svg>
               Onestaff v{{ apiResponse.user.app_version || '1.0.1' }}
             </span> &bull; 
+            <span v-if="apiResponse.user.location_name || apiResponse.user.ip_address" class="profile-location-pill" :title="`IP: ${apiResponse.user.ip_address || '-'} | Lat/Lng: ${apiResponse.user.latitude || '-'}, ${apiResponse.user.longitude || '-'}`">
+              📍 {{ apiResponse.user.location_name || apiResponse.user.ip_address }}
+            </span> &bull; 
             Mulai Shift: {{ formatWaktu(apiResponse.user.start_time) }} &bull; 
             Total: {{ apiResponse.logs?.length || 0 }} rekaman
           </p>
@@ -1520,5 +1523,17 @@ const formatApp = (app) => {
 .btn-alias-cancel:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.profile-location-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #e0f2fe;
+  color: #0284c7;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 12px;
 }
 </style>

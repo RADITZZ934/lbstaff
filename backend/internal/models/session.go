@@ -9,6 +9,10 @@ type TimeEntry struct {
 	EndTime              *time.Time `json:"end_time"`
 	TotalDurationSeconds *int       `json:"total_duration_seconds"`
 	AppVersion           *string    `json:"app_version,omitempty"`
+	LocationName         *string    `json:"location_name,omitempty"`
+	Latitude             *float64   `json:"latitude,omitempty"`
+	Longitude            *float64   `json:"longitude,omitempty"`
+	IPAddress            *string    `json:"ip_address,omitempty"`
 	CreatedAt            *time.Time `json:"created_at,omitempty"`
 }
 

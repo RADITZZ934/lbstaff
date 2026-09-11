@@ -5,3 +5,4 @@ packages:
 allowBuilds:
   active-win: true
   esbuild: true
+  uiohook-napi: set this to true or false
