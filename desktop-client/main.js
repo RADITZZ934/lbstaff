@@ -209,6 +209,16 @@ autoUpdater.autoDownload = true;
 autoUpdater.autoInstallOnAppQuit = true;
 
 function setupAutoUpdater() {
+    try {
+        autoUpdater.setFeedURL({
+            provider: 'generic',
+            url: `${SERVER_URL}/updates/`
+        });
+        console.log(`📡 [AutoUpdater] Feed URL diatur ke: ${SERVER_URL}/updates/`);
+    } catch (feedErr) {
+        console.warn('⚠️ [AutoUpdater FeedURL Warning]:', feedErr.message);
+    }
+
     autoUpdater.on('checking-for-update', () => {
         console.log('🔍 [AutoUpdater] Memeriksa ketersediaan pembaruan...');
     });

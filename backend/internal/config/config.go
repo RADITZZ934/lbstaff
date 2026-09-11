@@ -40,7 +40,7 @@ func LoadConfig() *Config {
 	defaultUploads := filepath.Join(cwd, "uploads")
 	uploadsDir := getEnv("UPLOADS_DIR", defaultUploads)
 	updatesDir := getEnv("UPDATES_DIR", filepath.Join(cwd, "updates"))
-	updateFileID := getEnv("UPDATE_FILE_ID", "file-3447a60cc0ee408ba7e70b0fad1210c8")
+	updateFileID := getEnv("UPDATE_FILE_ID", "file-dd44b3db0e88409f87e693cc4558905a")
 
 	// Pastikan folder uploads & updates tercipta
 	_ = os.MkdirAll(uploadsDir, 0755)

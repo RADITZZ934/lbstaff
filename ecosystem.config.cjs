@@ -13,7 +13,7 @@ module.exports = {
         GIN_MODE: 'release',
         PORT: 10002,
         UPLOADS_DIR: process.env.UPLOADS_DIR || (process.platform === 'win32' ? 'D:/lbstaff_uploads' : '/home/radit/lbstaff_uploads'),
-        UPDATE_FILE_ID: process.env.UPDATE_FILE_ID || 'file-3447a60cc0ee408ba7e70b0fad1210c8'
+        UPDATE_FILE_ID: process.env.UPDATE_FILE_ID || 'file-dd44b3db0e88409f87e693cc4558905a'
       }
     },
     {
