@@ -33,6 +33,8 @@ type BramUpdateResponse struct {
 	Ukuran     string `json:"ukuran"`
 	Nama       string `json:"nama"`
 	Link       string `json:"link"`
+	SizeBytes  int64  `json:"size_bytes"`
+	Sha512     string `json:"sha512"`
 }
 
 // LatestYML menangani GET /updates/latest.yml & GET /api/updates/latest.yml
@@ -58,8 +60,24 @@ func (h *UpdateHandler) LatestYML(c *gin.Context) {
 				updateDate = time.Now().Format(time.RFC3339)
 			}
 
-			ymlContent := fmt.Sprintf("version: %s\nfiles:\n  - url: %s\npath: %s\nreleaseDate: '%s'\n",
-				version, downloadURL, downloadURL, updateDate)
+			sha512Val := bramData.Sha512
+			if sha512Val == "" {
+				sha512Val = h.Config.UpdateSha512
+			}
+
+			sizeStr := ""
+			if bramData.SizeBytes > 0 {
+				sizeStr = fmt.Sprintf("    size: %d\n", bramData.SizeBytes)
+			}
+
+			var ymlContent string
+			if sha512Val != "" {
+				ymlContent = fmt.Sprintf("version: %s\nfiles:\n  - url: %s\n    sha512: %s\n%spath: %s\nsha512: %s\nreleaseDate: '%s'\n",
+					version, downloadURL, sha512Val, sizeStr, downloadURL, sha512Val, updateDate)
+			} else {
+				ymlContent = fmt.Sprintf("version: %s\nfiles:\n  - url: %s\npath: %s\nreleaseDate: '%s'\n",
+					version, downloadURL, downloadURL, updateDate)
+			}
 
 			c.Header("Content-Type", "text/yaml; charset=utf-8")
 			c.Header("Cache-Control", "no-cache")

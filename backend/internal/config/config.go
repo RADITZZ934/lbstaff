@@ -18,6 +18,7 @@ type Config struct {
 	UploadsDir   string
 	UpdatesDir   string
 	UpdateFileID string
+	UpdateSha512 string
 }
 
 func LoadConfig() *Config {
@@ -41,6 +42,7 @@ func LoadConfig() *Config {
 	uploadsDir := getEnv("UPLOADS_DIR", defaultUploads)
 	updatesDir := getEnv("UPDATES_DIR", filepath.Join(cwd, "updates"))
 	updateFileID := getEnv("UPDATE_FILE_ID", "file-dd44b3db0e88409f87e693cc4558905a")
+	updateSha512 := getEnv("UPDATE_SHA512", "SwtOhYLQNWXRPHFedlgv78waXsPESujwcI+iw2az72EDQO5PqY62Z4g02DLZffjzsCNdKAxkyLc02kmaJpQ/sg==")
 
 	// Pastikan folder uploads & updates tercipta
 	_ = os.MkdirAll(uploadsDir, 0755)
@@ -56,6 +58,7 @@ func LoadConfig() *Config {
 		UploadsDir:   filepath.Clean(uploadsDir),
 		UpdatesDir:   filepath.Clean(updatesDir),
 		UpdateFileID: updateFileID,
+		UpdateSha512: updateSha512,
 	}
 }
 
