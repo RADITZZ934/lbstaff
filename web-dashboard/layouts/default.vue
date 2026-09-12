@@ -2,40 +2,87 @@
   <div class="app-layout" @click="handleGlobalClick">
     <!-- Sidebar -->
     <aside class="sidebar">
+      <!-- Brand Header -->
       <div class="brand">
-        <h2>LB Tracker</h2>
+        <div class="brand-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h2>LBStaff</h2>
+          <span class="brand-badge">Tracker</span>
+        </div>
       </div>
+
+      <!-- Main Navigation -->
       <nav class="menu">
-        <NuxtLink to="/" class="menu-item">Live Monitoring</NuxtLink>
-        <NuxtLink to="/location" class="menu-item">📍 Peta Lokasi</NuxtLink>
+        <NuxtLink to="/" class="menu-item" active-class="active">
+          <svg class="menu-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+            <line x1="8" y1="21" x2="16" y2="21"></line>
+            <line x1="12" y1="17" x2="12" y2="21"></line>
+          </svg>
+          <span>Live Monitoring</span>
+        </NuxtLink>
+        <NuxtLink to="/location" class="menu-item" active-class="active">
+          <svg class="menu-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+            <circle cx="12" cy="10" r="3"></circle>
+          </svg>
+          <span>Peta Lokasi</span>
+        </NuxtLink>
       </nav>
 
-      <!-- Employee List Section inside Sidebar -->
+      <!-- Employee Directory Section -->
       <div class="employee-section">
         <div class="employee-header">
-          <span>Karyawan</span>
-          <span class="count-badge">{{ filteredEmployees.length }}</span>
+          <div class="header-title-group">
+            <span class="header-label">KARYAWAN</span>
+            <span class="count-badge">{{ filteredEmployees.length }}</span>
+          </div>
         </div>
         
         <!-- Search Input -->
         <div class="search-box">
-          <i class="fa-solid fa-magnifying-glass search-icon"></i>
+          <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
           <input 
             type="text" 
             v-model="employeeSearchQuery" 
             placeholder="Cari NIK, Nama, Alias..." 
             class="search-input"
           />
+          <button 
+            v-if="employeeSearchQuery" 
+            @click="employeeSearchQuery = ''" 
+            class="search-clear-btn"
+            type="button"
+            title="Hapus pencarian"
+          >
+            ✕
+          </button>
         </div>
 
-        <!-- Scrollable List of Employees with Swipe Left Support -->
+        <!-- Scrollable List of Employees with Clean Cards -->
         <div class="employee-list">
+          <div v-if="filteredEmployees.length === 0" class="empty-search-state">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              <line x1="8" y1="11" x2="14" y2="11"></line>
+            </svg>
+            <p>Tidak ada karyawan ditemukan</p>
+          </div>
+
           <div 
             v-for="emp in filteredEmployees" 
             :key="emp.nik"
             class="employee-row"
           >
-            <!-- Background Action Layer (Revealed on Swipe Left) -->
+            <!-- Background Action Layer (Swipe Left Delete) -->
             <div class="swipe-action-layer">
               <button 
                 type="button"
@@ -68,33 +115,53 @@
                 :class="['employee-item', { active: route.params.nik === emp.nik }]"
                 @click="handleClickLink($event, emp)"
               >
-                <div class="avatar-small">{{ (emp.alias || emp.name).charAt(0).toUpperCase() }}</div>
+                <!-- Avatar with initials -->
+                <div class="avatar-box" :style="getAvatarStyle(emp)">
+                  {{ getInitials(emp.alias || emp.name) }}
+                </div>
+
+                <!-- Info Column -->
                 <div class="emp-info">
                   <div class="emp-name-row">
-                    <span class="emp-name">{{ emp.alias || emp.name }}</span>
-                    <span v-if="emp.alias" class="alias-tag" title="Memiliki Alias">Alias</span>
-                  </div>
-                  <div class="emp-meta">
-                    <span class="emp-nik">
-                      NIK: {{ emp.nik }} 
-                      <span v-if="emp.alias" class="emp-realname">({{ emp.name }})</span>
+                    <span class="emp-name" :title="emp.alias || emp.name">
+                      {{ formatDisplayName(emp.alias || emp.name) }}
                     </span>
-                    <div class="emp-meta-right">
-                      <span class="emp-version-pill" :title="`Versi Onestaff: v${emp.app_version || '1.0.1'}`">v{{ emp.app_version || '1.0.1' }}</span>
-                      <span v-if="emp.seconds_since_last_activity <= 60 && emp.end_time === null" class="status online">
-                        <span class="dot animate-pulse"></span>
+                    <span v-if="emp.alias" class="alias-pill">ALIAS</span>
+                  </div>
+
+                  <div class="emp-meta-row">
+                    <span class="emp-nik-text">
+                      NIK: {{ emp.nik }}
+                      <span v-if="emp.alias" class="emp-subname">· {{ formatDisplayName(emp.name) }}</span>
+                    </span>
+
+                    <div class="emp-badge-group">
+                      <span class="version-tag">v{{ emp.app_version || '1.0.3' }}</span>
+                      
+                      <!-- Status Indicator -->
+                      <span 
+                        v-if="emp.seconds_since_last_activity <= 60 && emp.end_time === null" 
+                        class="status-indicator online" 
+                        title="Sedang Aktif Merekam"
+                      >
+                        <span class="pulse-ring"></span>
+                        <span class="status-core"></span>
                       </span>
-                      <span v-else class="status offline">
-                        <span class="dot"></span>
+                      <span 
+                        v-else 
+                        class="status-indicator offline" 
+                        title="Offline / Terputus"
+                      >
+                        <span class="status-core"></span>
                       </span>
                     </div>
                   </div>
                 </div>
 
-                <!-- Subtle delete icon for desktop mouse users -->
+                <!-- Desktop Hover Delete Button -->
                 <button 
                   type="button" 
-                  class="desktop-hover-delete" 
+                  class="desktop-delete-btn" 
                   @click.prevent.stop="openDeleteModal(emp)"
                   title="Hapus Karyawan"
                 >
@@ -114,9 +181,17 @@
     <!-- Main Content Area -->
     <div class="main-wrapper">
       <header class="topbar">
-        <div class="header-title">Admin Dashboard</div>
-        <div class="theme-toggle">
-          <div class="avatar">HR</div>
+        <div class="header-left">
+          <h1 class="header-title">Admin Dashboard</h1>
+        </div>
+        <div class="header-right">
+          <div class="user-profile-badge">
+            <div class="admin-avatar">HR</div>
+            <div class="admin-meta">
+              <span class="admin-name">Super Admin</span>
+              <span class="admin-role">Human Resources</span>
+            </div>
+          </div>
         </div>
       </header>
       
@@ -131,10 +206,12 @@
         <div class="modal-card">
           <div class="modal-header">
             <div class="modal-icon-danger">
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10"></circle>
-                <line x1="12" y1="8" x2="12" y2="12"></line>
-                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 6h18"></path>
+                <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                <line x1="10" y1="11" x2="10" y2="17"></line>
+                <line x1="14" y1="11" x2="14" y2="17"></line>
               </svg>
             </div>
             <div>
@@ -154,13 +231,18 @@
             </div>
             <div class="summary-row">
               <span class="summary-label">NIK:</span>
-              <span class="summary-value">{{ employeeToDelete?.nik }}</span>
+              <span class="summary-value font-mono">{{ employeeToDelete?.nik }}</span>
             </div>
           </div>
 
-          <p class="modal-warning">
-            ⚠️ Semua riwayat sesi kerja, log aktivitas, dan screenshot dari karyawan ini akan dihapus secara permanen dari server.
-          </p>
+          <div class="modal-warning">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path>
+              <line x1="12" y1="9" x2="12" y2="13"></line>
+              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+            <span>Semua riwayat shift, log aktivitas, dan screenshot dari karyawan ini akan dihapus permanen.</span>
+          </div>
 
           <div class="modal-actions">
             <button 
@@ -216,13 +298,54 @@ const allEmployees = computed(() => employeesResponse.value?.data || [])
 
 const filteredEmployees = computed(() => {
   if (!employeeSearchQuery.value) return allEmployees.value
-  const query = employeeSearchQuery.value.toLowerCase()
+  const query = employeeSearchQuery.value.toLowerCase().trim()
   return allEmployees.value.filter(emp => 
     (emp.name && emp.name.toLowerCase().includes(query)) || 
     (emp.alias && emp.alias.toLowerCase().includes(query)) || 
     (emp.nik && emp.nik.toLowerCase().includes(query))
   )
 })
+
+// Helper untuk membersihkan prefix nama "Karyawan "
+const formatDisplayName = (name) => {
+  if (!name) return ''
+  return name.replace(/^Karyawan\s+/i, '').trim()
+}
+
+// Helper untuk mendapatkan inisial avatar (2 huruf)
+const getInitials = (text) => {
+  if (!text) return '?'
+  const clean = text.replace(/^Karyawan\s+/i, '').replace(/[^a-zA-Z0-9\s]/g, '').trim()
+  const parts = clean.split(/\s+/)
+  if (parts.length >= 2 && parts[0] && parts[1]) {
+    return (parts[0][0] + parts[1][0]).toUpperCase()
+  }
+  return clean.slice(0, 2).toUpperCase() || '?'
+}
+
+// Warna avatar unik berdasarkan nama
+const avatarPalette = [
+  { bg: '#e0f2fe', color: '#0284c7' }, // Blue
+  { bg: '#ede9fe', color: '#7c3aed' }, // Purple
+  { bg: '#dcfce7', color: '#16a34a' }, // Green
+  { bg: '#fef3c7', color: '#d97706' }, // Amber
+  { bg: '#ffe4e6', color: '#e11d48' }, // Rose
+  { bg: '#f1f5f9', color: '#475569' }, // Slate
+  { bg: '#ccfbf1', color: '#0d9488' }  // Teal
+]
+
+const getAvatarStyle = (emp) => {
+  const str = emp.alias || emp.name || emp.nik || ''
+  let hash = 0
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  const index = Math.abs(hash) % avatarPalette.length
+  return {
+    backgroundColor: avatarPalette[index].bg,
+    color: avatarPalette[index].color
+  }
+}
 
 // --- SWIPE LEFT & GESTURE LOGIC ---
 const swipedEmpNik = ref(null)
@@ -243,7 +366,7 @@ const getItemTranslateX = (nik) => {
 }
 
 const handleGlobalClick = (e) => {
-  if (!e.target.closest('.swipe-action-layer') && !e.target.closest('.desktop-hover-delete')) {
+  if (!e.target.closest('.swipe-action-layer') && !e.target.closest('.desktop-delete-btn')) {
     if (swipedEmpNik.value && !hadSignificantDrag) {
       swipedEmpNik.value = null
     }
@@ -295,7 +418,7 @@ const handleTouchEnd = (e, emp) => {
 
 // Mouse drag events
 const handleMouseDown = (e, emp) => {
-  if (e.target.closest('.desktop-hover-delete') || e.target.closest('.swipe-delete-btn')) return
+  if (e.target.closest('.desktop-delete-btn') || e.target.closest('.swipe-delete-btn')) return
   startX.value = e.clientX
   currentDeltaX.value = swipedEmpNik.value === emp.nik ? -70 : 0
   isDragging.value = true
@@ -360,12 +483,10 @@ const confirmDeleteUser = async () => {
       method: 'DELETE'
     })
 
-    // Jika sedang melihat halaman user yang dihapus, alihkan ke dashboard utama
     if (route.params.nik === targetNik) {
       await router.push('/')
     }
 
-    // Refresh daftar karyawan
     await refresh()
     closeDeleteModal()
   } catch (err) {
@@ -378,96 +499,161 @@ const confirmDeleteUser = async () => {
 </script>
 
 <style scoped>
-/* Estetika SaaS: Bersih, Soft UI, Transisi Halus */
+/* Modern Premium SaaS Layout */
 .app-layout {
   display: flex;
   height: 100vh;
   background-color: #f8fafc;
-  font-family: 'Segoe UI', system-ui, sans-serif;
-  color: #334155;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  color: #1e293b;
   user-select: none;
+  overflow: hidden;
 }
 
+/* Sidebar Styling */
 .sidebar {
-  width: 270px;
+  width: 290px;
   background-color: #ffffff;
   border-right: 1px solid #e2e8f0;
   display: flex;
   flex-direction: column;
   height: 100vh;
   flex-shrink: 0;
+  box-shadow: 2px 0 8px -2px rgba(0, 0, 0, 0.03);
+  z-index: 10;
 }
 
+/* Brand Header */
 .brand {
-  padding: 24px;
+  padding: 18px 20px;
   border-bottom: 1px solid #f1f5f9;
-}
-
-.brand h2 {
-  margin: 0;
-  font-size: 20px;
-  color: #0f172a;
-  font-weight: 700;
-}
-
-.menu {
-  padding: 16px;
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 3px 6px -1px rgba(37, 99, 235, 0.3);
+}
+
+.brand-text {
+  display: flex;
+  align-items: center;
   gap: 8px;
 }
 
+.brand-text h2 {
+  margin: 0;
+  font-size: 17px;
+  color: #0f172a;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+
+.brand-badge {
+  font-size: 10px;
+  font-weight: 700;
+  background-color: #eff6ff;
+  color: #2563eb;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid #dbeafe;
+  letter-spacing: 0.3px;
+}
+
+/* Menu Navigation */
+.menu {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
 .menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   text-decoration: none;
   color: #64748b;
-  padding: 12px 16px;
+  padding: 9px 12px;
   border-radius: 8px;
+  font-size: 13.5px;
   font-weight: 500;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
+}
+
+.menu-icon {
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
 }
 
 .menu-item:hover {
-  background-color: #f1f5f9;
+  background-color: #f8fafc;
   color: #0f172a;
 }
 
-.router-link-exact-active {
-  background-color: #eff6ff;
-  color: #2563eb;
+.menu-item:hover .menu-icon {
+  transform: translateX(2px);
 }
 
+.menu-item.active,
+.menu-item.router-link-exact-active {
+  background-color: #eff6ff;
+  color: #2563eb;
+  font-weight: 600;
+}
+
+/* Employee Section */
 .employee-section {
   flex: 1;
   display: flex;
   flex-direction: column;
-  border-top: 1px solid #f1f5f9;
-  overflow: hidden;
-  padding: 16px 0;
+  min-height: 0;
+  padding-top: 14px;
 }
 
 .employee-header {
-  padding: 0 16px 12px 16px;
+  padding: 0 16px 10px 16px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 12px;
+}
+
+.header-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.header-label {
+  font-size: 11px;
   font-weight: 700;
   color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.6px;
 }
 
 .count-badge {
   background-color: #f1f5f9;
   color: #475569;
-  padding: 2px 6px;
-  border-radius: 4px;
+  padding: 1px 7px;
+  border-radius: 10px;
   font-size: 11px;
+  font-weight: 700;
 }
 
+/* Search Box */
 .search-box {
   position: relative;
-  margin: 0 16px 14px 16px;
+  margin: 0 14px 12px 14px;
   display: flex;
   align-items: center;
 }
@@ -475,35 +661,56 @@ const confirmDeleteUser = async () => {
 .search-icon {
   position: absolute;
   left: 10px;
-  font-size: 12px;
   color: #94a3b8;
+  pointer-events: none;
 }
 
 .search-input {
   width: 100%;
-  padding: 8px 12px 8px 28px;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
+  padding: 7px 28px 7px 30px;
+  border: 1px solid #e2e8f0;
+  border-radius: 7px;
   font-size: 12.5px;
-  color: #334155;
+  color: #1e293b;
   outline: none;
   background-color: #f8fafc;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
+}
+
+.search-input::placeholder {
+  color: #94a3b8;
 }
 
 .search-input:focus {
   border-color: #3b82f6;
   background-color: #ffffff;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
 }
 
+.search-clear-btn {
+  position: absolute;
+  right: 8px;
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.search-clear-btn:hover {
+  color: #475569;
+}
+
+/* Employee Scrollable List */
 .employee-list {
   flex: 1;
   overflow-y: auto;
-  padding: 0 10px;
+  padding: 2px 12px 24px 12px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 7px;
 }
 
 .employee-list::-webkit-scrollbar {
@@ -514,15 +721,36 @@ const confirmDeleteUser = async () => {
 }
 .employee-list::-webkit-scrollbar-thumb {
   background: #cbd5e1;
-  border-radius: 2px;
+  border-radius: 4px;
+}
+.employee-list::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
-/* SWIPE WRAPPER STYLES */
+/* Empty Search State */
+.empty-search-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+  color: #94a3b8;
+  gap: 8px;
+  text-align: center;
+}
+
+.empty-search-state p {
+  margin: 0;
+  font-size: 12.5px;
+}
+
+/* Row & Swipe Wrapper */
 .employee-row {
   position: relative;
   overflow: hidden;
-  border-radius: 8px;
-  background-color: #fee2e2; /* Background merah saat tergeser */
+  border-radius: 9px;
+  background-color: #fee2e2;
+  flex-shrink: 0;
 }
 
 .swipe-action-layer {
@@ -563,56 +791,77 @@ const confirmDeleteUser = async () => {
   background-color: #ffffff;
   z-index: 2;
   transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
-  border-radius: 8px;
+  border-radius: 9px;
+  width: 100%;
 }
 
+/* Employee Item Card */
 .employee-item {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 10px;
-  border-radius: 8px;
+  padding: 9px 11px;
+  border-radius: 9px;
   text-decoration: none;
-  color: #475569;
-  transition: all 0.2s ease;
-  border: 1px solid #f1f5f9;
+  color: #334155;
+  transition: all 0.15s ease;
+  border: 1px solid #eef2f6;
+  background-color: #ffffff;
   position: relative;
+  box-sizing: border-box;
 }
 
 .employee-item:hover {
   background-color: #f8fafc;
-  color: #0f172a;
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
 }
 
+/* Active State */
 .employee-item.active {
-  background-color: #eff6ff;
-  border-color: #bfdbfe;
-  color: #2563eb;
+  background-color: #f0f7ff;
+  border-color: #93c5fd;
+  box-shadow: 0 2px 6px -1px rgba(37, 99, 235, 0.1);
 }
 
-.avatar-small {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  background-color: #f1f5f9;
-  color: #475569;
-  font-size: 12.5px;
-  font-weight: bold;
+.employee-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  background-color: #2563eb;
+  border-radius: 0 3px 3px 0;
+}
+
+/* Avatar Initials Box */
+.avatar-box {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  letter-spacing: -0.2px;
+  border: 1px solid rgba(0, 0, 0, 0.04);
 }
 
-.employee-item.active .avatar-small {
-  background-color: #2563eb;
-  color: #ffffff;
+.employee-item.active .avatar-box {
+  background-color: #2563eb !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 5px rgba(37, 99, 235, 0.3);
 }
 
+/* Info Column */
 .emp-info {
   flex: 1;
   display: flex;
   flex-direction: column;
+  gap: 2px;
   min-width: 0;
 }
 
@@ -626,70 +875,114 @@ const confirmDeleteUser = async () => {
 .emp-name {
   font-size: 13px;
   font-weight: 600;
+  color: #0f172a;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.alias-tag {
-  font-size: 9px;
-  font-weight: 700;
-  background: #dbeafe;
+.employee-item.active .emp-name {
   color: #1d4ed8;
-  padding: 1px 4px;
-  border-radius: 3px;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-  flex-shrink: 0;
 }
 
-.emp-meta {
+.alias-pill {
+  font-size: 8.5px;
+  font-weight: 700;
+  background: #e0f2fe;
+  color: #0284c7;
+  border: 1px solid #bae6fd;
+  padding: 0 4px;
+  border-radius: 3px;
+  letter-spacing: 0.4px;
+  flex-shrink: 0;
+  line-height: 14px;
+}
+
+.emp-meta-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 6px;
   font-size: 11px;
-  color: #94a3b8;
-  margin-top: 1px;
 }
 
-.emp-meta-right {
+.emp-nik-text {
+  color: #64748b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+
+.emp-subname {
+  color: #94a3b8;
+  font-size: 10.5px;
+}
+
+.employee-item.active .emp-nik-text {
+  color: #3b82f6;
+}
+
+.emp-badge-group {
   display: flex;
   align-items: center;
   gap: 5px;
+  flex-shrink: 0;
 }
 
-.emp-version-pill {
+.version-tag {
   font-size: 9.5px;
   font-weight: 600;
-  background: #f1f5f9;
+  background-color: #f1f5f9;
   color: #64748b;
   border: 1px solid #e2e8f0;
-  padding: 0 4px;
+  padding: 1px 4px;
   border-radius: 4px;
 }
 
-.employee-item.active .emp-version-pill {
-  background: rgba(255, 255, 255, 0.2);
-  border-color: rgba(255, 255, 255, 0.3);
-  color: #ffffff;
+.employee-item.active .version-tag {
+  background-color: #ffffff;
+  border-color: #bfdbfe;
+  color: #2563eb;
 }
 
-.emp-realname {
-  color: #94a3b8;
-  font-size: 10.5px;
-  font-style: italic;
+/* Status Pulse Indicator */
+.status-indicator {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.employee-item.active .emp-meta {
-  color: #93c5fd;
+.status-indicator .status-core {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #94a3b8;
 }
 
-.employee-item.active .emp-realname {
-  color: #bfdbfe;
+.status-indicator.online .status-core {
+  background-color: #10b981;
 }
 
-/* Hover delete button on desktop */
-.desktop-hover-delete {
+.status-indicator.online .pulse-ring {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: rgba(16, 185, 129, 0.4);
+  animation: pulse-ring-anim 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse-ring-anim {
+  0% { transform: scale(0.6); opacity: 1; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+/* Hover Delete Button */
+.desktop-delete-btn {
   opacity: 0;
   visibility: hidden;
   background: transparent;
@@ -697,50 +990,24 @@ const confirmDeleteUser = async () => {
   color: #94a3b8;
   cursor: pointer;
   padding: 4px;
-  border-radius: 4px;
+  border-radius: 5px;
   transition: all 0.15s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-left: 2px;
 }
 
-.employee-item:hover .desktop-hover-delete {
+.employee-item:hover .desktop-delete-btn {
   opacity: 1;
   visibility: visible;
 }
 
-.desktop-hover-delete:hover {
+.desktop-delete-btn:hover {
   background-color: #fee2e2;
   color: #ef4444;
 }
 
-.status .dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  display: inline-block;
-}
-
-.status.online .dot {
-  background-color: #16a34a;
-  box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.7);
-}
-
-.status.offline .dot {
-  background-color: #cbd5e1;
-}
-
-.animate-pulse {
-  animation: pulse-dot-layout 1.5s infinite;
-}
-
-@keyframes pulse-dot-layout {
-  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.7); }
-  70% { transform: scale(1); box-shadow: 0 0 0 3px rgba(22, 163, 74, 0); }
-  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(22, 163, 74, 0); }
-}
-
+/* Main Layout & Topbar */
 .main-wrapper {
   flex: 1;
   display: flex;
@@ -749,39 +1016,71 @@ const confirmDeleteUser = async () => {
 }
 
 .topbar {
-  height: 70px;
+  height: 64px;
   background-color: #ffffff;
   border-bottom: 1px solid #e2e8f0;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 32px;
+  padding: 0 28px;
+  flex-shrink: 0;
 }
 
 .header-title {
   font-size: 18px;
-  font-weight: 600;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.3px;
+  margin: 0;
 }
 
-.avatar {
-  width: 36px;
-  height: 36px;
+.user-profile-badge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 10px 4px 6px;
+  border-radius: 20px;
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.admin-avatar {
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  background-color: #e2e8f0;
+  background-color: #2563eb;
+  color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: bold;
-  font-size: 14px;
+  font-weight: 700;
+  font-size: 11px;
+}
+
+.admin-meta {
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #0f172a;
+  line-height: 1.2;
+}
+
+.admin-role {
+  font-size: 10px;
+  color: #64748b;
 }
 
 .content-area {
   flex: 1;
-  padding: 32px;
+  padding: 28px;
   overflow-y: auto;
 }
 
-/* MODAL STYLES */
+/* Modal Dialog */
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -812,9 +1111,9 @@ const confirmDeleteUser = async () => {
 }
 
 .modal-icon-danger {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
   background-color: #fee2e2;
   display: flex;
   align-items: center;
@@ -864,6 +1163,10 @@ const confirmDeleteUser = async () => {
   font-weight: 700;
 }
 
+.font-mono {
+  font-family: monospace;
+}
+
 .text-blue {
   color: #2563eb;
   font-weight: 600;
@@ -872,12 +1175,15 @@ const confirmDeleteUser = async () => {
 .modal-warning {
   margin: 0 0 20px 0;
   font-size: 12px;
-  color: #b91c1c;
+  color: #991b1b;
   background-color: #fef2f2;
   border-left: 3px solid #ef4444;
-  padding: 8px 12px;
+  padding: 10px 12px;
   border-radius: 0 6px 6px 0;
   line-height: 1.4;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
 }
 
 .modal-actions {
@@ -935,4 +1241,4 @@ const confirmDeleteUser = async () => {
 .fade-leave-to {
   opacity: 0;
 }
-</style>
+</style>
