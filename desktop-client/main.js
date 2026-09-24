@@ -1,4 +1,4 @@
-const { app, BrowserWindow, desktopCapturer, powerMonitor, Tray, Menu, ipcMain } = require('electron');
+const { app, BrowserWindow, desktopCapturer, powerMonitor, Tray, Menu, ipcMain, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
@@ -371,6 +371,17 @@ app.whenReady().then(() => {
     // Jalankan migrasi jika pengguna baru saja upgrade dari versi sebelumnya
     migratePreviousDataIfNeeded();
 
+    // Pastikan izin Geolocation browser diizinkan otomatis untuk akurasi GPS
+    if (session && session.defaultSession) {
+        session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+            if (permission === 'geolocation') {
+                callback(true);
+            } else {
+                callback(false);
+            }
+        });
+    }
+
     createWindow();
 
     // Setup System Tray
@@ -612,6 +623,21 @@ ipcMain.on('login-sukses', (event, data) => {
     mainWindow.hide();
 });
 
+// --- LISTENER KOORDINAT GPS DARI RENDERER PROCESS (HTML5 GEOLOCATION) ---
+let latestGPSLocation = null;
+
+ipcMain.on('gps-location-update', (event, data) => {
+    if (data && typeof data.latitude === 'number' && typeof data.longitude === 'number') {
+        latestGPSLocation = {
+            latitude: data.latitude,
+            longitude: data.longitude,
+            accuracy: data.accuracy || null,
+            timestamp: Date.now()
+        };
+        console.log(`📡 [GPS HTML5] Koordinat akurat diterima: ${data.latitude}, ${data.longitude} (Akurasi: ±${data.accuracy || 0}m)`);
+    }
+});
+
 // Mencegat proses aplikasi keluar (termasuk saat laptop di-shutdown OS)
 app.on('before-quit', async (event) => {
     if (uIOhook) {
@@ -658,45 +684,62 @@ async function pantauJendelaAktif() {
     }
 }
 
-// --- HELPER GEOLOKASI (IP-BASED GEOLOCATION) ---
+// --- HELPER GEOLOKASI (IP & HTML5 GPS HYBRID) ---
 let cachedLocation = null;
 let lastLocationFetchTime = 0;
 const LOCATION_CACHE_TTL_MS = 15 * 60 * 1000; // Cache lokasi 15 menit
 
 async function getLocationInfo() {
     const now = Date.now();
-    if (cachedLocation && (now - lastLocationFetchTime < LOCATION_CACHE_TTL_MS)) {
-        return cachedLocation;
-    }
+    let locationData = { location_name: null, latitude: null, longitude: null, ip_address: null };
 
-    try {
-        const res = await axios.get('http://ip-api.com/json/', { timeout: 4000 });
-        if (res.data && res.data.status === 'success') {
-            const city = res.data.city || '';
-            const regionName = res.data.regionName || res.data.region || '';
-            const country = res.data.country || '';
-            const location_name = [city, regionName, country].filter(Boolean).join(', ');
+    // 1. Ambil nama wilayah dan fallback IP Geolocation jika cache kedaluwarsa
+    if (!cachedLocation || (now - lastLocationFetchTime >= LOCATION_CACHE_TTL_MS)) {
+        try {
+            const res = await axios.get('http://ip-api.com/json/', { timeout: 4000 });
+            if (res.data && res.data.status === 'success') {
+                const city = res.data.city || '';
+                const regionName = res.data.regionName || res.data.region || '';
+                const country = res.data.country || '';
+                const location_name = [city, regionName, country].filter(Boolean).join(', ');
 
-            cachedLocation = {
-                location_name: location_name || `${res.data.query}`,
-                latitude: res.data.lat || null,
-                longitude: res.data.lon || null,
-                ip_address: res.data.query || null
-            };
-            lastLocationFetchTime = now;
-            console.log(`📍 [Location] Lokasi terdeteksi: ${cachedLocation.location_name} (${cachedLocation.latitude}, ${cachedLocation.longitude})`);
-            return cachedLocation;
+                cachedLocation = {
+                    location_name: location_name || `${res.data.query}`,
+                    latitude: res.data.lat || null,
+                    longitude: res.data.lon || null,
+                    ip_address: res.data.query || null
+                };
+                lastLocationFetchTime = now;
+                console.log(`📍 [IP Location] Lokasi terdeteksi: ${cachedLocation.location_name} (${cachedLocation.latitude}, ${cachedLocation.longitude})`);
+            }
+        } catch (err) {
+            console.warn(`⚠️ [Location] Gagal mengambil geolokasi IP: ${err.message}`);
         }
-    } catch (err) {
-        console.warn(`⚠️ [Location] Gagal mengambil geolokasi IP: ${err.message}`);
     }
 
-    return cachedLocation || { location_name: null, latitude: null, longitude: null, ip_address: null };
+    if (cachedLocation) {
+        locationData = { ...cachedLocation };
+    }
+
+    // 2. Prioritaskan koordinat presisi tinggi dari GPS Browser (navigator.geolocation) jika masih baru (< 30 menit)
+    if (latestGPSLocation && (now - latestGPSLocation.timestamp < 30 * 60 * 1000)) {
+        locationData.latitude = latestGPSLocation.latitude;
+        locationData.longitude = latestGPSLocation.longitude;
+    }
+
+    return locationData;
 }
 
 // Fungsi inti untuk mengambil screenshot dan mengirim payload
 async function rekamDanKirim() {
     if (!currentUser) return;
+
+    // Trigger pembaruan GPS dari renderer di latar belakang
+    try {
+        if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents) {
+            mainWindow.webContents.send('request-gps-location');
+        }
+    } catch (e) {}
 
     // --- 1. LOGIKA DETEKSI IDLE & LAYAR TERKUNCI ---
     if (isScreenLocked) {

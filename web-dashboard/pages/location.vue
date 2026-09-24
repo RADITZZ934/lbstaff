@@ -86,6 +86,17 @@
               >
                 Fokus di Peta &rarr;
               </button>
+              <a 
+                v-if="user.latitude && user.longitude" 
+                :href="`https://maps.google.com/?q=${user.latitude},${user.longitude}`" 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                class="btn-gmaps" 
+                @click.stop 
+                title="Buka titik koordinat di Google Maps"
+              >
+                Maps &nearr;
+              </a>
               <NuxtLink :to="`/user/${user.nik}`" class="btn-detail" @click.stop>
                 Detail Sesi
               </NuxtLink>
@@ -216,6 +227,7 @@ const updateMarkers = () => {
         </div>
         <div class="popup-footer">
           <a href="/user/${user.nik}" class="popup-btn">Buka Detail Sesi &rarr;</a>
+          <a href="https://maps.google.com/?q=${user.latitude},${user.longitude}" target="_blank" rel="noopener noreferrer" class="popup-btn-gmaps">📍 Google Maps</a>
         </div>
       </div>
     `
@@ -587,6 +599,40 @@ onUnmounted(() => {
   font-weight: 600;
   padding: 0;
   cursor: pointer;
+}
+
+.btn-gmaps {
+  font-size: 11px;
+  color: #2563eb;
+  font-weight: 600;
+  text-decoration: none;
+  background: #eff6ff;
+  border: 1px solid #dbeafe;
+  padding: 1px 6px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.btn-gmaps:hover {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.popup-btn-gmaps {
+  display: inline-block;
+  padding: 6px 10px;
+  background: #2563eb;
+  color: #ffffff !important;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.2s;
+  margin-left: 6px;
+}
+
+.popup-btn-gmaps:hover {
+  background: #1d4ed8;
 }
 
 .btn-detail {

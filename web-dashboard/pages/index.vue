@@ -38,6 +38,21 @@
             <div class="user-title-row">
               <h3 :title="user.alias || user.name">{{ formatDisplayName(user.alias || user.name) }}</h3>
               <span v-if="user.alias" class="badge-alias">Alias</span>
+              <a 
+                v-if="user.latitude && user.longitude" 
+                :href="`https://maps.google.com/?q=${user.latitude},${user.longitude}`" 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                class="map-pin-btn" 
+                @click.stop 
+                title="Buka titik koordinat akurat di Google Maps"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                  <circle cx="12" cy="10" r="3"></circle>
+                </svg>
+                <span>Peta</span>
+              </a>
             </div>
             <span class="badge">NIK: {{ user.nik }} <span v-if="user.alias" class="badge-realname">({{ formatDisplayName(user.name) }})</span></span>
           </div>
@@ -46,9 +61,22 @@
           <div class="time-info">
             <span class="label">Mulai Shift:</span>
             <strong>{{ formatWaktu(user.start_time) }}</strong>
-            <span v-if="user.location_name || user.ip_address" class="location-badge" :title="`IP: ${user.ip_address || '-'} | Coords: ${user.latitude || '-'}, ${user.longitude || '-'}`">
-              📍 {{ user.location_name || user.ip_address }}
-            </span>
+            <div v-if="user.location_name || user.ip_address" class="location-row">
+              <span class="location-badge" :title="`IP: ${user.ip_address || '-'} | Coords: ${user.latitude || '-'}, ${user.longitude || '-'}`">
+                📍 {{ user.location_name || user.ip_address }}
+              </span>
+              <a 
+                v-if="user.latitude && user.longitude" 
+                :href="`https://maps.google.com/?q=${user.latitude},${user.longitude}`" 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                class="map-direct-link" 
+                @click.stop 
+                title="Buka Google Maps"
+              >
+                Maps &nearr;
+              </a>
+            </div>
           </div>
           <div class="status-wrapper">
             <span class="card-version-tag" :title="`Versi Onestaff: v${user.app_version || '1.0.3'}`">v{{ user.app_version || '1.0.3' }}</span>
@@ -303,6 +331,54 @@ const formatWaktu = (waktuISO) => {
   font-weight: 600;
 }
 
+.location-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+.map-pin-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #2563eb;
+  background: #eff6ff;
+  border: 1px solid #dbeafe;
+  padding: 2px 7px;
+  border-radius: 6px;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  margin-left: auto;
+}
+
+.map-pin-btn:hover {
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #2563eb;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.2);
+}
+
+.map-direct-link {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #2563eb;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 4px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.map-direct-link:hover {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
 .location-badge {
   font-size: 10.5px;
   color: #0284c7;
@@ -314,7 +390,6 @@ const formatWaktu = (waktuISO) => {
   align-items: center;
   gap: 3px;
   font-weight: 500;
-  margin-top: 2px;
   max-width: 170px;
   overflow: hidden;
   text-overflow: ellipsis;

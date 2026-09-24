@@ -127,6 +127,17 @@
                       {{ formatDisplayName(emp.alias || emp.name) }}
                     </span>
                     <span v-if="emp.alias" class="alias-pill">ALIAS</span>
+                    <a 
+                      v-if="emp.latitude && emp.longitude" 
+                      :href="`https://maps.google.com/?q=${emp.latitude},${emp.longitude}`" 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      class="sidebar-maps-pin" 
+                      @click.stop 
+                      title="Buka titik koordinat di Google Maps"
+                    >
+                      📍
+                    </a>
                   </div>
 
                   <div class="emp-meta-row">
@@ -896,6 +907,26 @@ const confirmDeleteUser = async () => {
   letter-spacing: 0.4px;
   flex-shrink: 0;
   line-height: 14px;
+}
+
+.sidebar-maps-pin {
+  font-size: 11px;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1px 3px;
+  border-radius: 4px;
+  background: #eff6ff;
+  border: 1px solid #dbeafe;
+  line-height: 1;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.sidebar-maps-pin:hover {
+  background: #2563eb;
+  transform: scale(1.1);
 }
 
 .emp-meta-row {

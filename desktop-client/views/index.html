@@ -39,6 +39,38 @@
         const nikInput = document.getElementById('nik');
         const errorMsg = document.getElementById('errorMsg');
 
+        // --- FASE 3: PENGAMBILAN TITIK GPS VIA NAVIGATOR.GEOLOCATION ---
+        function fetchCoordinates() {
+            if (typeof navigator !== 'undefined' && navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        const { latitude, longitude, accuracy } = position.coords;
+                        ipcRenderer.send('gps-location-update', {
+                            latitude,
+                            longitude,
+                            accuracy,
+                            source: 'html5_geolocation'
+                        });
+                    },
+                    (error) => {
+                        console.warn('⚠️ [Geolocation Browser Warning]:', error.message);
+                    },
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+                );
+            }
+        }
+
+        // Jalankan pengambilan titik GPS saat aplikasi siap & berkala setiap 5 menit
+        window.addEventListener('DOMContentLoaded', () => {
+            fetchCoordinates();
+            setInterval(fetchCoordinates, 5 * 60 * 1000);
+        });
+
+        // Tangkap permintaan pembaruan lokasi dari main process
+        ipcRenderer.on('request-gps-location', () => {
+            fetchCoordinates();
+        });
+
         // Pre-fill NIK jika sudah pernah tersimpan sebelumnya
         window.addEventListener('DOMContentLoaded', async () => {
             try {
@@ -65,6 +97,9 @@
             loginBtn.textContent = 'Memverifikasi...';
             loginBtn.disabled = true;
             errorMsg.style.display = 'none';
+
+            // Ambil koordinat GPS terbaru saat tombol login diklik
+            fetchCoordinates();
 
             try {
                 const result = await ipcRenderer.invoke('attempt-login', { nik });

@@ -57,7 +57,21 @@
             </span> &bull; 
             <span v-if="apiResponse.user.location_name || apiResponse.user.ip_address" class="profile-location-pill" :title="`IP: ${apiResponse.user.ip_address || '-'} | Lat/Lng: ${apiResponse.user.latitude || '-'}, ${apiResponse.user.longitude || '-'}`">
               📍 {{ apiResponse.user.location_name || apiResponse.user.ip_address }}
-            </span> &bull; 
+            </span>
+            <a 
+              v-if="apiResponse.user.latitude && apiResponse.user.longitude" 
+              :href="`https://maps.google.com/?q=${apiResponse.user.latitude},${apiResponse.user.longitude}`" 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              class="profile-maps-link" 
+              title="Buka titik koordinat akurat di Google Maps"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                <circle cx="12" cy="10" r="3"></circle>
+              </svg>
+              <span>Google Maps</span>
+            </a> &bull; 
             Mulai Shift: {{ formatWaktu(apiResponse.user.start_time) }} &bull; 
             Total: {{ apiResponse.logs?.length || 0 }} rekaman
           </p>
@@ -132,6 +146,16 @@
                   <div class="activity-metrics">
                     <span class="metric-badge keyboard"><i class="fa-solid fa-keyboard"></i> Keyboard: {{ selectedLog?.keyboard_clicks || 0 }} klik</span>
                     <span class="metric-badge mouse"><i class="fa-solid fa-mouse"></i> Mouse: {{ selectedLog?.mouse_moves || 0 }} gerak</span>
+                    <a 
+                      v-if="selectedLog?.latitude && selectedLog?.longitude" 
+                      :href="`https://maps.google.com/?q=${selectedLog.latitude},${selectedLog.longitude}`" 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      class="metric-badge maps" 
+                      title="Buka titik GPS log ini di Google Maps"
+                    >
+                      📍 Maps ({{ selectedLog.latitude.toFixed(4) }}, {{ selectedLog.longitude.toFixed(4) }}) &nearr;
+                    </a>
                   </div>
                 </div>
                 
@@ -205,6 +229,17 @@
               <div class="card-stats">
                 <span class="badge-mini keyboard"><i class="fa-solid fa-keyboard"></i> {{ log.keyboard_clicks || 0 }}</span>
                 <span class="badge-mini mouse"><i class="fa-solid fa-mouse"></i> {{ log.mouse_moves || 0 }}</span>
+                <a 
+                  v-if="log.latitude && log.longitude" 
+                  :href="`https://maps.google.com/?q=${log.latitude},${log.longitude}`" 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  class="badge-mini maps-link" 
+                  @click.stop 
+                  title="Buka titik koordinat di Google Maps"
+                >
+                  📍 Maps
+                </a>
               </div>
               <h4>Aplikasi Aktif:</h4>
               <ul>
@@ -240,6 +275,17 @@
                 <div class="list-stats">
                   <span class="badge-mini keyboard"><i class="fa-solid fa-keyboard"></i> Keyboard: {{ log.keyboard_clicks || 0 }}</span>
                   <span class="badge-mini mouse"><i class="fa-solid fa-mouse"></i> Mouse: {{ log.mouse_moves || 0 }}</span>
+                  <a 
+                    v-if="log.latitude && log.longitude" 
+                    :href="`https://maps.google.com/?q=${log.latitude},${log.longitude}`" 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    class="badge-mini maps-link" 
+                    @click.stop 
+                    title="Buka titik koordinat di Google Maps"
+                  >
+                    📍 Google Maps
+                  </a>
                 </div>
               </div>
               <div class="list-apps">
@@ -829,6 +875,56 @@ const formatApp = (app) => {
 .metric-badge.mouse {
   background-color: #f0fdf4;
   color: #16a34a;
+}
+
+.metric-badge.maps {
+  background-color: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #dbeafe;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.metric-badge.maps:hover {
+  background-color: #2563eb;
+  color: #ffffff;
+}
+
+.profile-maps-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background-color: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #dbeafe;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-decoration: none;
+  margin-left: 4px;
+  transition: all 0.2s;
+}
+
+.profile-maps-link:hover {
+  background-color: #2563eb;
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.2);
+}
+
+.badge-mini.maps-link {
+  background-color: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #dbeafe;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.badge-mini.maps-link:hover {
+  background-color: #2563eb;
+  color: #ffffff;
 }
 
 .app-details-list h3 {
