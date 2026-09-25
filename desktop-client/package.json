@@ -1,7 +1,7 @@
 {
   "name": "onestaff",
   "productName": "Onestaff",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Onestaff Desktop Tracker",
   "main": "main.js",
   "scripts": {

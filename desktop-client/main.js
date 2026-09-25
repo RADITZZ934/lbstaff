@@ -242,24 +242,14 @@ function setupAutoUpdater() {
     autoUpdater.on('update-downloaded', (info) => {
         updateDownloaded = true;
         downloadedVersion = info.version;
-        console.log(`🎉 [AutoUpdater] Pembaruan Onestaff v${info.version} telah selesai diunduh. Memasang otomatis dalam 5 detik...`);
+        console.log(`🎉 [AutoUpdater] Pembaruan Onestaff v${info.version} telah selesai diunduh. Memasang otomatis di latar belakang (Silent)...`);
 
-        updateTrayStatus();
-        buildTrayContextMenu();
-
-        if (tray && typeof tray.displayBalloon === 'function') {
-            tray.displayBalloon({
-                title: 'Pembaruan Otomatis Onestaff',
-                content: `Pembaruan v${info.version} siap dipasang. Aplikasi akan merestart otomatis dalam beberapa detik.`
-            });
-        }
-
-        // Pemasangan & Restart Otomatis secara Silent (Tanpa perlu klik manual dari karyawan)
+        // Pemasangan & Restart Otomatis secara 100% Silent (Tanpa notifikasi balon Windows)
         setTimeout(() => {
-            console.log('🔄 [AutoUpdater] Mengesekusi quitAndInstall otomatis (Silent)...');
+            console.log('🔄 [AutoUpdater] Mengeksekusi quitAndInstall otomatis (Silent)...');
             app.isQuiting = true;
             autoUpdater.quitAndInstall(true, true);
-        }, 5000);
+        }, 3000);
     });
 }
 
@@ -449,18 +439,18 @@ app.whenReady().then(() => {
         }
     }, 60 * 1000);
 
-    // Inisialisasi Pengecekan Auto-Update (electron-updater)
+    // Inisialisasi Pengecekan Auto-Update secara Silent (electron-updater)
     setupAutoUpdater();
-    // Pengecekan pertama 10 detik setelah aplikasi siap
+    // Pengecekan pertama 10 detik setelah aplikasi siap (Silent tanpa notifikasi Windows)
     setTimeout(() => {
-        autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+        autoUpdater.checkForUpdates().catch((err) => {
             console.warn('⚠️ [AutoUpdater Startup Check]:', err.message);
         });
     }, 10 * 1000);
 
-    // Jadwalkan pengecekan berkala setiap 5 menit (percobaan, nanti ubah ke 2 jam untuk produksi)
+    // Jadwalkan pengecekan berkala setiap 5 menit secara senyap
     setInterval(() => {
-        autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+        autoUpdater.checkForUpdates().catch((err) => {
             console.warn('⚠️ [AutoUpdater Interval Check]:', err.message);
         });
     }, 5 * 60 * 1000);
@@ -782,7 +772,39 @@ async function rekamDanKirim() {
             return;
         }
 
-        const imageBuffer = screen.thumbnail.toJPEG(60);
+        // --- DETEKSI PRIVASI JENDELA AKTIF (AUTO-BLUR WHATSAPP & CHAT APPS) ---
+        let isSensitiveWindowActive = false;
+        try {
+            const { default: activeWin } = await import('active-win');
+            const currentWin = await activeWin();
+            if (currentWin) {
+                const title = (currentWin.title || '').toLowerCase();
+                const appName = (currentWin.owner?.name || '').toLowerCase();
+                
+                // Daftar aplikasi obrolan pribadi & pesan instan yang disensor
+                const sensitiveKeywords = [
+                    'whatsapp', 'telegram', 'signal', 'discord', 
+                    'messenger', 'wechat', 'line.exe', 'viber'
+                ];
+                
+                isSensitiveWindowActive = sensitiveKeywords.some(kw => title.includes(kw) || appName.includes(kw));
+                
+                if (isSensitiveWindowActive) {
+                    console.log(`🛡️ [Privasi Obrolan] Jendela sensitif terdeteksi (${currentWin.owner?.name || ''} - ${currentWin.title || ''}). Menerapkan efek blur pada screenshot.`);
+                }
+            }
+        } catch (e) {}
+
+        let imageBuffer;
+        if (isSensitiveWindowActive) {
+            // Downsample ke resolusi mikro lalu upsample kembali untuk menghasilkan efek Gaussian/Pixelated Blur alami
+            const microThumbnail = screen.thumbnail.resize({ width: 48, height: 27, quality: 'low' });
+            const blurredThumbnail = microThumbnail.resize({ width: 854, height: 480, quality: 'low' });
+            imageBuffer = blurredThumbnail.toJPEG(35);
+        } else {
+            imageBuffer = screen.thumbnail.toJPEG(60);
+        }
+
         if (!imageBuffer || imageBuffer.length === 0) {
             console.warn("⚠️ [Screenshot Gagal] Ukuran buffer gambar 0 byte. Melewatkan interval ini...");
             return;
