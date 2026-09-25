@@ -39,54 +39,7 @@ type BramUpdateResponse struct {
 
 // LatestYML menangani GET /updates/latest.yml & GET /api/updates/latest.yml
 func (h *UpdateHandler) LatestYML(c *gin.Context) {
-	fileId := h.Config.UpdateFileID
-	bramURL := fmt.Sprintf("https://braminnovation.com/api/checkupdate/file/%s", fileId)
-
-	resp, err := h.client.Get(bramURL)
-	if err == nil && resp.StatusCode == http.StatusOK {
-		defer resp.Body.Close()
-		var bramData BramUpdateResponse
-		if decErr := json.NewDecoder(resp.Body).Decode(&bramData); decErr == nil {
-			downloadURL := strings.Replace(bramData.Link, "http://", "https://", 1)
-			if downloadURL == "" {
-				downloadURL = fmt.Sprintf("https://braminnovation.com/api/files/download/%s", fileId)
-			}
-			version := bramData.Versi
-			if version == "" {
-				version = "1.0.2"
-			}
-			updateDate := bramData.UpdateDate
-			if updateDate == "" {
-				updateDate = time.Now().Format(time.RFC3339)
-			}
-
-			sha512Val := bramData.Sha512
-			if sha512Val == "" {
-				sha512Val = h.Config.UpdateSha512
-			}
-
-			sizeStr := ""
-			if bramData.SizeBytes > 0 {
-				sizeStr = fmt.Sprintf("    size: %d\n", bramData.SizeBytes)
-			}
-
-			var ymlContent string
-			if sha512Val != "" {
-				ymlContent = fmt.Sprintf("version: %s\nfiles:\n  - url: %s\n    sha512: %s\n%spath: %s\nsha512: %s\nreleaseDate: '%s'\n",
-					version, downloadURL, sha512Val, sizeStr, downloadURL, sha512Val, updateDate)
-			} else {
-				ymlContent = fmt.Sprintf("version: %s\nfiles:\n  - url: %s\npath: %s\nreleaseDate: '%s'\n",
-					version, downloadURL, downloadURL, updateDate)
-			}
-
-			c.Header("Content-Type", "text/yaml; charset=utf-8")
-			c.Header("Cache-Control", "no-cache")
-			c.String(http.StatusOK, ymlContent)
-			return
-		}
-	}
-
-	// Fallback ke file fisik jika ada di disk lokal
+	// 1. Cek file fisik jika ada di disk lokal terlebih dahulu
 	localYml := filepath.Join(h.Config.UpdatesDir, "latest.yml")
 	if fi, statErr := os.Stat(localYml); statErr == nil && !fi.IsDir() {
 		c.Header("Content-Type", "text/yaml; charset=utf-8")
@@ -95,7 +48,56 @@ func (h *UpdateHandler) LatestYML(c *gin.Context) {
 		return
 	}
 
-	log.Printf("⚠️ [UpdateHandler] Gagal mengambil latest.yml dari Bram Innovation & disk lokal: %v", err)
+	// 2. Fallback ke Bram Innovation jika file lokal belum tersedia
+	fileId := h.Config.UpdateFileID
+	if fileId != "" {
+		bramURL := fmt.Sprintf("https://braminnovation.com/api/checkupdate/file/%s", fileId)
+		resp, err := h.client.Get(bramURL)
+		if err == nil && resp.StatusCode == http.StatusOK {
+			defer resp.Body.Close()
+			var bramData BramUpdateResponse
+			if decErr := json.NewDecoder(resp.Body).Decode(&bramData); decErr == nil {
+				downloadURL := strings.Replace(bramData.Link, "http://", "https://", 1)
+				if downloadURL == "" {
+					downloadURL = fmt.Sprintf("https://braminnovation.com/api/files/download/%s", fileId)
+				}
+				version := bramData.Versi
+				if version == "" {
+					version = "1.0.4"
+				}
+				updateDate := bramData.UpdateDate
+				if updateDate == "" {
+					updateDate = time.Now().Format(time.RFC3339)
+				}
+
+				sha512Val := bramData.Sha512
+				if sha512Val == "" {
+					sha512Val = h.Config.UpdateSha512
+				}
+
+				sizeStr := ""
+				if bramData.SizeBytes > 0 {
+					sizeStr = fmt.Sprintf("    size: %d\n", bramData.SizeBytes)
+				}
+
+				var ymlContent string
+				if sha512Val != "" {
+					ymlContent = fmt.Sprintf("version: %s\nfiles:\n  - url: %s\n    sha512: %s\n%spath: %s\nsha512: %s\nreleaseDate: '%s'\n",
+						version, downloadURL, sha512Val, sizeStr, downloadURL, sha512Val, updateDate)
+				} else {
+					ymlContent = fmt.Sprintf("version: %s\nfiles:\n  - url: %s\npath: %s\nreleaseDate: '%s'\n",
+						version, downloadURL, downloadURL, updateDate)
+				}
+
+				c.Header("Content-Type", "text/yaml; charset=utf-8")
+				c.Header("Cache-Control", "no-cache")
+				c.String(http.StatusOK, ymlContent)
+				return
+			}
+		}
+	}
+
+	log.Printf("⚠️ [UpdateHandler] Gagal mengambil latest.yml dari disk lokal & Bram Innovation")
 	c.String(http.StatusNotFound, "Update metadata tidak ditemukan")
 }
 
